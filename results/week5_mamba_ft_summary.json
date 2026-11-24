@@ -1,0 +1,35 @@
+{
+  "checkpoint": "historical checkpoint not included",
+  "checkpoint_epoch": 10,
+  "checkpoint_best_val_loss": 0.01961512203243646,
+  "representation": "log_magnitude",
+  "flow_start": "mixture",
+  "split": "test",
+  "num_steps": 1,
+  "num_samples": 2000,
+  "spectrogram_l1": {
+    "mixture_mean": 0.05707760153245181,
+    "prediction_mean": 0.030973138369387015,
+    "improvement_mean": 0.02610446316981688,
+    "improved_ratio": 0.6845
+  },
+  "waveform_l1": {
+    "mixture_mean": 0.0420037932987907,
+    "prediction_mean": 0.02721024362987373,
+    "improvement_mean": 0.014793549652094952,
+    "improved_ratio": 0.7335
+  },
+  "si_sdr": {
+    "mixture_mean_db": 0.004401049847714603,
+    "prediction_mean_db": 1.4171793995519402,
+    "improvement_mean_db": 1.4127783507294953,
+    "improved_ratio": 0.6415
+  },
+  "residual_waveform_l1": {
+    "prediction_mean": 0.027210230001597665
+  },
+  "residual_si_sdr": {
+    "prediction_mean_db": 1.9747146260470618
+  },
+  "mixture_consistency_l1": 4.185075725267285e-11
+}

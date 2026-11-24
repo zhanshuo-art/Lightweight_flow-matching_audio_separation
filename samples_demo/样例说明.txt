@@ -1,0 +1,17 @@
+分离效果试听样例
+
+模型：checkpoint/week6_best.pt（IRM辅助训练）
+后处理：TF-mask clipping
+数据：test split，1-step inference
+
+每个子目录含 mixture.wav、target.wav、prediction.wav 和 spectrogram_triplet.png。
+样例从manifest前200条test records中按Target SI-SDR选取，每个目标类别最多保留一条；它们用于试听展示，不代表测试集整体水平。完整测试集平均Target SI-SDR为2.535 dB。
+
+样例：
+demo_00_vacuum_cleaner：clock_tick + vacuum_cleaner，目标vacuum_cleaner，15.52 dB
+demo_01_door_wood_knock：door_wood_knock + glass_breaking，目标door_wood_knock，13.62 dB
+demo_02_rain：rain + dog，目标rain，11.95 dB
+demo_03_car_horn：glass_breaking + car_horn，目标car_horn，11.22 dB
+
+复现命令（在“代码与模型”目录运行）：
+python week6/scripts/export_demo_samples.py --checkpoint checkpoint/week6_best.pt --data-root week2/data_esc50_2mix

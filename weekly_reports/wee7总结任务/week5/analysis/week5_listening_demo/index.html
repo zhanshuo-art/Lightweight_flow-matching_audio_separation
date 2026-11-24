@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Week5 Audio Separation Listening Demo</title>
+  <style>
+    :root { --red:#8e1620; --text:#202124; --muted:#62666d; --line:#d9dde3; --bg:#f6f7f9; }
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }
+    main { max-width: 1180px; margin: 0 auto; padding: 28px 18px 42px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { color: var(--muted); line-height: 1.55; }
+    .stats { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; margin:18px 0; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .label { color:var(--muted); font-size:13px; }
+    .value { margin-top:6px; font-size:22px; font-weight:700; color:var(--red); }
+    .table-wrap { overflow-x:auto; background:#fff; border:1px solid var(--line); border-radius:8px; }
+    table { border-collapse:collapse; width:100%; min-width:1120px; }
+    th, td { border-bottom:1px solid var(--line); padding:10px; vertical-align:top; text-align:left; }
+    th { background:#fafafa; font-size:13px; }
+    audio { width: 170px; max-width: 100%; }
+    .sample-name { font-weight:700; color:var(--red); margin-bottom:4px; }
+    .metric { color:var(--muted); font-size:12px; margin-top:4px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Week5 Target + Residual Listening Demo</h1>
+  <p>
+    这里展示 Week5 fine-tuned Mamba 模型的 test 样例。每行包含 mixture 组成、target label、
+    residual label，以及真实 target/residual 和模型预测的 target/residual。
+  </p>
+  <div class="stats">
+    <div class="card"><div class="label">Samples</div><div class="value">20</div></div>
+    <div class="card"><div class="label">Mean Spec L1</div><div class="value">0.03362</div></div>
+    <div class="card"><div class="label">Mean Target Wave L1</div><div class="value">0.03046</div></div>
+    <div class="card"><div class="label">Mean Target SI-SDR</div><div class="value">2.00 dB</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Sample</th>
+          <th>Mixture</th>
+          <th>Target</th>
+          <th>Residual Target</th>
+          <th>Week4 Mamba Target</th>
+          <th>Week5 Target</th>
+          <th>Week5 Residual</th>
+        </tr>
+      </thead>
+      <tbody>
+        
+            <tr>
+              <td>
+                <div class="sample-name">sample_00</div>
+                <div>ID: test_000001_t0</div>
+                <div>Mixture: <b>clock_tick + keyboard_typing</b></div>
+                <div>Target: <b>clock_tick</b></div>
+                <div>Residual: <b>keyboard_typing</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_00/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_00/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_00/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_00/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_00/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02581</div>
+                <div class="metric">Wave L1 0.02789</div>
+                <div class="metric">SI-SDR -8.01 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_00/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.02789</div>
+                <div class="metric">SI-SDR 8.38 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_01</div>
+                <div>ID: test_000001_t1</div>
+                <div>Mixture: <b>clock_tick + keyboard_typing</b></div>
+                <div>Target: <b>keyboard_typing</b></div>
+                <div>Residual: <b>clock_tick</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_01/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_01/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_01/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_01/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_01/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.03823</div>
+                <div class="metric">Wave L1 0.03921</div>
+                <div class="metric">SI-SDR 0.80 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_01/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.03921</div>
+                <div class="metric">SI-SDR -24.45 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_02</div>
+                <div>ID: test_000002_t0</div>
+                <div>Mixture: <b>rain + siren</b></div>
+                <div>Target: <b>rain</b></div>
+                <div>Residual: <b>siren</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_02/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_02/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_02/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_02/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_02/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02090</div>
+                <div class="metric">Wave L1 0.03351</div>
+                <div class="metric">SI-SDR 2.51 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_02/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.03351</div>
+                <div class="metric">SI-SDR 4.99 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_03</div>
+                <div>ID: test_000002_t1</div>
+                <div>Mixture: <b>rain + siren</b></div>
+                <div>Target: <b>siren</b></div>
+                <div>Residual: <b>rain</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_03/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_03/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_03/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_03/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_03/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.04256</div>
+                <div class="metric">Wave L1 0.04691</div>
+                <div class="metric">SI-SDR 1.77 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_03/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04691</div>
+                <div class="metric">SI-SDR -0.73 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_04</div>
+                <div>ID: test_000003_t0</div>
+                <div>Mixture: <b>keyboard_typing + vacuum_cleaner</b></div>
+                <div>Target: <b>keyboard_typing</b></div>
+                <div>Residual: <b>vacuum_cleaner</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_04/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_04/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_04/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_04/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_04/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.03803</div>
+                <div class="metric">Wave L1 0.01421</div>
+                <div class="metric">SI-SDR 0.32 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_04/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.01421</div>
+                <div class="metric">SI-SDR 4.15 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_05</div>
+                <div>ID: test_000003_t1</div>
+                <div>Mixture: <b>keyboard_typing + vacuum_cleaner</b></div>
+                <div>Target: <b>vacuum_cleaner</b></div>
+                <div>Residual: <b>keyboard_typing</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_05/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_05/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_05/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_05/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_05/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.01794</div>
+                <div class="metric">Wave L1 0.01211</div>
+                <div class="metric">SI-SDR 8.71 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_05/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.01211</div>
+                <div class="metric">SI-SDR 6.00 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_06</div>
+                <div>ID: test_000004_t0</div>
+                <div>Mixture: <b>glass_breaking + car_horn</b></div>
+                <div>Target: <b>glass_breaking</b></div>
+                <div>Residual: <b>car_horn</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_06/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_06/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_06/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_06/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_06/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02527</div>
+                <div class="metric">Wave L1 0.01038</div>
+                <div class="metric">SI-SDR -4.27 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_06/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.01038</div>
+                <div class="metric">SI-SDR 12.56 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_07</div>
+                <div>ID: test_000004_t1</div>
+                <div>Mixture: <b>glass_breaking + car_horn</b></div>
+                <div>Target: <b>car_horn</b></div>
+                <div>Residual: <b>glass_breaking</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_07/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_07/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_07/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_07/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_07/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.06404</div>
+                <div class="metric">Wave L1 0.04277</div>
+                <div class="metric">SI-SDR 5.23 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_07/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04277</div>
+                <div class="metric">SI-SDR -9.29 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_08</div>
+                <div>ID: test_000005_t0</div>
+                <div>Mixture: <b>car_horn + glass_breaking</b></div>
+                <div>Target: <b>car_horn</b></div>
+                <div>Residual: <b>glass_breaking</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_08/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_08/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_08/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_08/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_08/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.03799</div>
+                <div class="metric">Wave L1 0.03368</div>
+                <div class="metric">SI-SDR 5.63 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_08/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.03368</div>
+                <div class="metric">SI-SDR -10.97 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_09</div>
+                <div>ID: test_000005_t1</div>
+                <div>Mixture: <b>car_horn + glass_breaking</b></div>
+                <div>Target: <b>glass_breaking</b></div>
+                <div>Residual: <b>car_horn</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_09/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_09/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_09/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_09/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_09/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.01327</div>
+                <div class="metric">Wave L1 0.00539</div>
+                <div class="metric">SI-SDR 0.89 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_09/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.00539</div>
+                <div class="metric">SI-SDR 16.70 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_10</div>
+                <div>ID: test_000006_t0</div>
+                <div>Mixture: <b>rain + dog</b></div>
+                <div>Target: <b>rain</b></div>
+                <div>Residual: <b>dog</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_10/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_10/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_10/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_10/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_10/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02592</div>
+                <div class="metric">Wave L1 0.03058</div>
+                <div class="metric">SI-SDR 3.51 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_10/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.03058</div>
+                <div class="metric">SI-SDR 9.40 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_11</div>
+                <div>ID: test_000006_t1</div>
+                <div>Mixture: <b>rain + dog</b></div>
+                <div>Target: <b>dog</b></div>
+                <div>Residual: <b>rain</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_11/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_11/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_11/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_11/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_11/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.03584</div>
+                <div class="metric">Wave L1 0.02930</div>
+                <div class="metric">SI-SDR 4.67 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_11/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.02930</div>
+                <div class="metric">SI-SDR -1.28 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_12</div>
+                <div>ID: test_000007_t0</div>
+                <div>Mixture: <b>keyboard_typing + door_wood_knock</b></div>
+                <div>Target: <b>keyboard_typing</b></div>
+                <div>Residual: <b>door_wood_knock</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_12/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_12/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_12/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_12/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_12/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.01573</div>
+                <div class="metric">Wave L1 0.00749</div>
+                <div class="metric">SI-SDR 1.23 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_12/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.00750</div>
+                <div class="metric">SI-SDR 1.08 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_13</div>
+                <div>ID: test_000007_t1</div>
+                <div>Mixture: <b>keyboard_typing + door_wood_knock</b></div>
+                <div>Target: <b>door_wood_knock</b></div>
+                <div>Residual: <b>keyboard_typing</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_13/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_13/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_13/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_13/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_13/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.01828</div>
+                <div class="metric">Wave L1 0.00740</div>
+                <div class="metric">SI-SDR 2.15 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_13/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.00739</div>
+                <div class="metric">SI-SDR 1.68 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_14</div>
+                <div>ID: test_000008_t0</div>
+                <div>Mixture: <b>vacuum_cleaner + clock_tick</b></div>
+                <div>Target: <b>vacuum_cleaner</b></div>
+                <div>Residual: <b>clock_tick</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_14/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_14/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_14/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_14/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_14/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02041</div>
+                <div class="metric">Wave L1 0.04763</div>
+                <div class="metric">SI-SDR 2.71 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_14/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04763</div>
+                <div class="metric">SI-SDR -0.96 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_15</div>
+                <div>ID: test_000008_t1</div>
+                <div>Mixture: <b>vacuum_cleaner + clock_tick</b></div>
+                <div>Target: <b>clock_tick</b></div>
+                <div>Residual: <b>vacuum_cleaner</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_15/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_15/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_15/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_15/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_15/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.02214</div>
+                <div class="metric">Wave L1 0.04116</div>
+                <div class="metric">SI-SDR -0.18 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_15/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04116</div>
+                <div class="metric">SI-SDR 2.97 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_16</div>
+                <div>ID: test_000009_t0</div>
+                <div>Mixture: <b>siren + rain</b></div>
+                <div>Target: <b>siren</b></div>
+                <div>Residual: <b>rain</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_16/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_16/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_16/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_16/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_16/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.05099</div>
+                <div class="metric">Wave L1 0.05774</div>
+                <div class="metric">SI-SDR 0.69 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_16/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.05774</div>
+                <div class="metric">SI-SDR 2.31 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_17</div>
+                <div>ID: test_000009_t1</div>
+                <div>Mixture: <b>siren + rain</b></div>
+                <div>Target: <b>rain</b></div>
+                <div>Residual: <b>siren</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_17/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_17/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_17/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_17/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_17/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.04096</div>
+                <div class="metric">Wave L1 0.04431</div>
+                <div class="metric">SI-SDR 4.13 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_17/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04431</div>
+                <div class="metric">SI-SDR 3.18 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_18</div>
+                <div>ID: test_000010_t0</div>
+                <div>Mixture: <b>rain + chirping_birds</b></div>
+                <div>Target: <b>rain</b></div>
+                <div>Residual: <b>chirping_birds</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_18/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_18/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_18/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_18/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_18/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.03652</div>
+                <div class="metric">Wave L1 0.03100</div>
+                <div class="metric">SI-SDR 6.90 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_18/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.03100</div>
+                <div class="metric">SI-SDR 6.78 dB</div>
+              </td>
+            </tr>
+            
+            <tr>
+              <td>
+                <div class="sample-name">sample_19</div>
+                <div>ID: test_000010_t1</div>
+                <div>Mixture: <b>rain + chirping_birds</b></div>
+                <div>Target: <b>chirping_birds</b></div>
+                <div>Residual: <b>rain</b></div>
+              </td>
+              <td><audio controls preload="none" src="assets/sample_19/mixture.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_19/target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_19/residual_target.wav"></audio></td>
+              <td><audio controls preload="none" src="assets/sample_19/week4_prediction_target.wav"></audio></td>
+              <td>
+                <audio controls preload="none" src="assets/sample_19/week5_prediction_target.wav"></audio>
+                <div class="metric">Spec L1 0.08156</div>
+                <div class="metric">Wave L1 0.04660</div>
+                <div class="metric">SI-SDR 0.52 dB</div>
+              </td>
+              <td>
+                <audio controls preload="none" src="assets/sample_19/week5_prediction_residual.wav"></audio>
+                <div class="metric">Wave L1 0.04660</div>
+                <div class="metric">SI-SDR 1.34 dB</div>
+              </td>
+            </tr>
+            
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>

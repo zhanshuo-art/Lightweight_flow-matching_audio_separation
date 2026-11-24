@@ -1,0 +1,71 @@
+paths:
+  esc50_root: ../ESC-50-master
+  output_root: ../data_esc50_2mix
+
+dataset:
+  name: ESC-50
+  selected_categories:
+    - dog
+    - rain
+    - chirping_birds
+    - keyboard_typing
+    - door_wood_knock
+    - clock_tick
+    - glass_breaking
+    - vacuum_cleaner
+    - siren
+    - car_horn
+  target_prompts:
+    dog: dog barking
+    rain: rain sound
+    chirping_birds: chirping birds
+    keyboard_typing: keyboard typing
+    door_wood_knock: wooden door knock
+    clock_tick: clock ticking
+    glass_breaking: glass breaking
+    vacuum_cleaner: vacuum cleaner
+    siren: siren sound
+    car_horn: car horn
+
+splits:
+  train: [1, 2, 3]
+  val: [4]
+  test: [5]
+
+audio:
+  sample_rate: 16000
+  channels: mono
+  duration: 5.0
+  rms_target: 0.1
+  silence_rms_threshold: 0.0005
+  peak_limit: 0.99
+  relative_gain_db_range: [-5.0, 5.0]
+  wav_subtype: PCM_16
+
+mixing:
+  seed: 12345
+  mixtures_per_split:
+    train: 10000
+    val: 1000
+    test: 1000
+  compatibility_pairs:
+    - [dog, rain]
+    - [dog, chirping_birds]
+    - [rain, chirping_birds]
+    - [rain, car_horn]
+    - [rain, siren]
+    - [keyboard_typing, door_wood_knock]
+    - [keyboard_typing, clock_tick]
+    - [keyboard_typing, vacuum_cleaner]
+    - [door_wood_knock, clock_tick]
+    - [clock_tick, vacuum_cleaner]
+    - [glass_breaking, door_wood_knock]
+    - [glass_breaking, siren]
+    - [glass_breaking, car_horn]
+    - [siren, car_horn]
+
+validation:
+  additivity_tolerance: 0.0002
+  peak_tolerance: 0.99
+  max_audio_checks: null
+  figure_example_split: train

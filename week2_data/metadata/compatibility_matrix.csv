@@ -1,0 +1,11 @@
+,dog,rain,chirping_birds,keyboard_typing,door_wood_knock,clock_tick,glass_breaking,vacuum_cleaner,siren,car_horn
+dog,0,1,1,0,0,0,0,0,0,0
+rain,1,0,1,0,0,0,0,0,1,1
+chirping_birds,1,1,0,0,0,0,0,0,0,0
+keyboard_typing,0,0,0,0,1,1,0,1,0,0
+door_wood_knock,0,0,0,1,0,1,1,0,0,0
+clock_tick,0,0,0,1,1,0,0,1,0,0
+glass_breaking,0,0,0,0,1,0,0,0,1,1
+vacuum_cleaner,0,0,0,1,0,1,0,0,0,0
+siren,0,1,0,0,0,0,1,0,0,1
+car_horn,0,1,0,0,0,0,1,0,1,0

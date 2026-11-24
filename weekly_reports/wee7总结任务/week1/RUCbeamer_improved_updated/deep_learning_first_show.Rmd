@@ -1,0 +1,265 @@
+---
+title: "基于高效序列建模的轻量级流匹配音频分离"
+short-title: "流匹配音频分离"
+subtitle: "深度学习入门课程第一次展示"
+author: "潘羽"
+institute: "深度学习自选题小组"
+date: "2026年5月7日"
+fontsize: 10pt
+output: beamer_presentation
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \newcommand{\smallsource}[1]{\vspace{0.2em}{\tiny\color{gray}{#1}}}
+---
+
+## 目录
+
+\tableofcontents
+
+# 项目定位
+
+## 选题动机
+
+\textbf{题目：基于高效序列建模的轻量级流匹配音频分离模型研究}
+
+背景与挑战：
+
+- 音频属于极长序列数据，标准 Transformer 的全局自注意力在处理长序列时计算复杂度过高（呈平方级增长）。
+- 最新研究（如 SAM Audio）表明，“流匹配 (Flow Matching) 结合 DiT 架构”在音频分离中表现优异。
+- 考虑到课程大作业的算力限制，本项目聚焦于特定的结构优化：
+
+\begin{center}
+\large
+在轻量级网络中，如果将全局自注意力替换为更高效的结构，能否在大幅节省算力的前提下，维持较好的分离性能？
+\end{center}
+
+## 前沿研究：SAM Audio 与 DAVIS-Flow
+
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.48\textwidth}
+\small
+\textbf{SAM Audio} 验证了流匹配的潜力，但依赖昂贵的隐空间编解码器 (VAE，即音频压缩模块) 以及海量数据。
+
+\textbf{DAVIS-Flow} 提供了极佳的轻量化参考：
+\begin{itemize}
+\item \textbf{直接作用于频谱}：免去复杂的特征压缩，直接在时频图（Spectrogram）上做生成，大大降低工程门槛。
+\item \textbf{更鲁棒的损失函数}：频谱图中含有大量静音（零值）区域。采用 $L_1$ 绝对值误差替代 $L_2$ 均方误差来预测演化方向，能有效避免静音区误差被放大，提升分离纯净度。
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=3.4cm, minimum height=0.55cm] (mix) {混合音频频谱图};
+\node[draw, rounded corners, fill=rucdeepred!12, below=of mix, minimum width=3.4cm, minimum height=0.6cm] (model) {Flow Matching + L1 Loss};
+\node[draw, rounded corners, fill=deepblue!12, below left=0.45cm and -0.45cm of model, minimum width=1.45cm, minimum height=0.5cm] (tar) {目标频谱};
+\node[draw, rounded corners, fill=deepblue!12, below right=0.45cm and -0.45cm of model, minimum width=1.45cm, minimum height=0.5cm] (res) {剩余频谱};
+\draw[-{Stealth[length=2mm]}] (mix) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (tar);
+\draw[-{Stealth[length=2mm]}] (model) -- (res);
+\end{tikzpicture}
+\end{center}
+
+\smallsource{参考：DAVIS-Flow (2025)}
+\end{column}
+\end{columns}
+
+## 数据策略：基于 Hive 数据集的方法论
+
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.5\textwidth}
+\small
+\textbf{数据规模的权衡}：相比 SAM Audio 百万小时级的数据依赖，最新研究 \textbf{Hive} 发现：
+
+- \textbf{纯度优于规模}：高质量、纯净的单事件声音信号，比单纯堆砌含噪数据更有利于模型收敛。
+- \textbf{合成策略}：通过严格对齐的混合策略自行构建精简数据集，依然能达到出色的分离效果。
+\end{column}
+\begin{column}{0.45\textwidth}
+\small
+\textbf{对本项目的指导意义}：
+在资源受限的情况下：
+1. 聚焦纯净的小型开源数据（如截取 1-5秒 的干净音轨）。
+2. 从 \textbf{单样本过拟合} 入手（即让模型先“死记硬背”一个样本），验证逻辑正确性。
+3. 将核心精力放在验证网络结构与算子效率上。
+\end{column}
+\end{columns}
+
+## 研究重点：从全局到局部的注意力机制
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=rucdeepred!12, minimum width=8.6cm, minimum height=0.6cm] (sam) {工业级方案：海量多模态数据 + 大规模 DiT + VAE 隐空间压缩};
+\node[draw, rounded corners, fill=deepblue!10, below=of sam, minimum width=8.6cm, minimum height=0.6cm] (ours) {本项目方案：高纯度小数据 + 轻量级频谱 DiT + 局部/线性注意力替换};
+\node[draw, rounded corners, fill=softgray, below=of ours, minimum width=8.6cm, minimum height=0.6cm] (goal) {核心目标：探究“计算效率”与“分离效果”的最佳平衡点};
+\draw[-{Stealth[length=2mm]}] (sam) -- (ours);
+\draw[-{Stealth[length=2mm]}] (ours) -- (goal);
+\end{tikzpicture}
+\end{center}
+
+项目当前进展：
+
+- 处于 \textbf{选题确认与实验方案设计阶段}。
+- 已完成核心文献研读，梳理出前沿架构的优缺点。
+- 下一步：搭建数据管线，跑通单样本基准模型，推进消融实验。
+
+# 方法框架
+
+## 核心框架解析
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners, minimum width=8.8cm, minimum height=0.6cm, font=\small},
+  note/.style={font=\scriptsize\color{gray}},
+  node distance=0.3cm
+]
+\node[box, fill=rucdeepred!12] (flow) {Flow Matching：生成框架，学习从纯噪声到目标音频频谱的“直线”演化};
+\node[box, fill=deepblue!10, below=of flow] (dit) {Mini-DiT：预测骨干，根据当前时间步，输出去噪的“速度场方向”};
+\node[box, fill=softgray, below=of dit] (block) {算子替换：在 DiT 内部评估 Self-Attention、Sliding Window 等机制};
+\node[box, fill=white, below=of block] (eval) {综合评估：分离质量、参数量、显存占用、推理速度};
+\draw[-{Stealth[length=2mm]}] (flow) -- (dit);
+\draw[-{Stealth[length=2mm]}] (dit) -- (block);
+\draw[-{Stealth[length=2mm]}] (block) -- (eval);
+\end{tikzpicture}
+\end{center}
+
+关键思路：保持最外层流匹配（Flow Matching）的数学逻辑不变，仅通过替换网络内部的注意力机制来优化计算效率。
+
+## 简化的流匹配 (Flow Matching) 原理
+
+流匹配可以理解为寻找从噪声到目标数据的一条平滑路径：
+
+设目标频谱为 $x_1$，高斯噪声为 $x_0$，构建线性概率路径（即两点连线）：
+
+$$
+x_t = (1-t)x_0 + tx_1,\qquad t\sim U(0,1)
+$$
+
+该路径上的理想演化速度场（Velocity Field，即指向目标的去噪方向）为：
+
+$$
+v^\star = x_1 - x_0
+$$
+
+训练神经网络预测此速度场，指导模型逐步去噪：
+
+$$
+\mathcal{L}_{FM} = \mathbb{E}_{t,x_0,x_1}\left\|\hat v_\theta(x_t,t,c)-v^\star\right\|_1
+$$
+
+\smallsource{注：采用 $L_1$ Loss 代替传统扩散模型中的 $L_2$ Loss，对频谱稀疏特征更友好。}
+
+## 基准架构 (Baseline) 设计
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.7cm, minimum height=0.6cm] (x) {$x_t$ 加噪频谱};
+\node[draw, rounded corners, fill=softgray, right=of x, minimum width=2.2cm, minimum height=0.6cm] (tok) {Patchify 分块};
+\node[draw, rounded corners, fill=rucdeepred!12, right=of tok, minimum width=2.5cm, minimum height=0.6cm] (blocks) {DiT 主干网络};
+\node[draw, rounded corners, fill=deepblue!12, right=of blocks, minimum width=2.2cm, minimum height=0.6cm] (v) {预测去噪方向 $\hat v_\theta$};
+\node[draw, rounded corners, fill=white, below=0.55cm of blocks, minimum width=3.4cm, minimum height=0.5cm] (cond) {时间步 $t$ + 混合音频频谱拼接};
+\draw[-{Stealth[length=2mm]}] (x) -- (tok);
+\draw[-{Stealth[length=2mm]}] (tok) -- (blocks);
+\draw[-{Stealth[length=2mm]}] (blocks) -- (v);
+\draw[-{Stealth[length=2mm]}] (cond) -- (blocks);
+\end{tikzpicture}
+\end{center}
+
+基础配置方案：
+
+- \textbf{输入}：音频的二维时频图 (STFT / Mel-spectrogram)。
+- \textbf{主干网络}：构建低层数（2-4层）的 Mini-DiT 作为基准。
+- \textbf{实验任务}：初期在少量高纯度样本上跑通前向/反向传播。
+
+## 核心探究：注意力机制对比
+
+\begin{center}
+\begin{tabular}{p{0.25\textwidth}p{0.23\textwidth}p{0.38\textwidth}}
+\toprule
+机制 & 复杂度特征 & 本项目中的角色 \\
+\midrule
+全局自注意力 \\ (Self-Attention) & $O(N^2)$，随序列长度平方级暴增 & 基准方案：性能上限较高，但处理长音频时计算与显存瓶颈显著 \\
+\midrule
+滑动窗口注意力 \\ (Sliding Window) & $O(N \times w)$，限制感受野于局部窗口 & 保底优化：利用音频的局部连续性，截断全局依赖以换取效率提升 \\
+\midrule
+状态空间模型 \\ (Mamba / SSM) & $O(N)$，呈线性增长 & 进阶方案：抛弃注意力机制，具备长时记忆优势及极致的推理速度 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{重点验证}：采用局部或线性复杂度机制替代全局计算后，分离质量的损失程度及其与效率提升之间的折中关系。
+
+# 实验设计
+
+## 实验策略：分阶段验证
+
+\textbf{工程挑战}：高采样率下的原始音频波形数据量极大，直接处理不现实。
+
+为此，采用稳妥的分阶段验证策略：
+
+1. \textbf{步骤一：低维特征转换}
+   - 将一维波形降维成时频图像（Mel-spectrogram 或 STFT Magnitude）。
+2. \textbf{步骤二：单样本过拟合 (Single Sample Overfit)}
+   - 取两段 5 秒的纯净声音混合，在这一对数据上反复训练。
+   - 若 Loss 无法收敛，说明底层数学逻辑或网络搭建有误，便于快速排错。
+3. \textbf{步骤三：架构泛化与评估}
+   - 在跑通的基础上扩展至小型数据集。
+   - 平行对比 Self-Attention、Sliding Window 以及 Mamba 架构的表现。
+
+## 实验对比与评估维度
+
+\begin{center}
+\begin{tabular}{p{0.22\textwidth}p{0.24\textwidth}p{0.38\textwidth}}
+\toprule
+测试架构 & 实验目的 & 预期结果分析 \\
+\midrule
+Mini-DiT \\ (全局注意力) & 建立对比基准线 & 确定分离质量的参考上限，观察训练动态 \\
+\midrule
+Window-DiT \\ (局部窗口) & 测试局部机制 & 预期推理速度提升及显存降低，量化其质量折损 \\
+\midrule
+Mamba-DiT \\ (状态空间) & 测试线性机制 & 验证在较长音频下模型对效率与效果的最佳平衡 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+综合评估维度：
+
+- \textbf{分离质量}：分离后的试听 Demo 表现与客观损失 (L1 Loss, SDR)。
+- \textbf{计算效率}：参数规模、峰值显存、推理耗时随序列长度的增长曲线。
+
+# 计划与风险
+
+## 风险评估与预案
+
+\begin{center}
+\begin{tabular}{p{0.25\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
+\toprule
+潜在风险 & 具体表现 & 保底对策 \\
+\midrule
+Mamba 环境配置复杂 & 特定 CUDA 环境下失败 & 降级并优先推进滑动窗口注意力 (Sliding Window) 实验 \\
+\midrule
+数据加载与显存溢出 & 数据集过大或特征维度过高导致 OOM & 借鉴 Hive 方法论，仅采用高纯度极短音频切片进行实验 \\
+\midrule
+生成模型收敛困难 & 框架参数敏感，导致训练初期 Loss 发散 & 缩小模型规模，利用单一样本反复调试以确保数据流正确 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+预期最终交付：开源可复现的实验代码、音频分离对比 Demo、直观的性能对比图表及期末技术报告。
+
+## 总结
+
+综上所述，本项目在有限算力下，聚焦于：
+
+- \textbf{理论应用}：吸收 SAM Audio、DAVIS-Flow 与 Hive 论文的底层架构创新与数据精简策略。
+- \textbf{链路开发}：从零搭建生成式音频分离的数据处理、流匹配训练与采样管线。
+- \textbf{核心假设验证}：通过控制变量实验，实证轻量化注意力机制（或状态空间模型）对音频分离系统计算性价比的具体改善程度。
+
+\vspace{1.0em}
+
+\center{\LARGE{汇报完毕，谢谢大家！}}

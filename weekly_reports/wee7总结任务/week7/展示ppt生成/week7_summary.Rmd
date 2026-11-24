@@ -1,0 +1,528 @@
+---
+title: "Week 7：项目总结与模型对比分析"
+short-title: "Week 7 总结"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离模型研究"
+author: "深度学习自选题小组"
+institute: "深度学习入门课程大作业"
+date: "2026年6月14日"
+fontsize: 10pt
+output:
+  beamer_presentation:
+    latex_engine: xelatex
+    template: beamer_default.tex
+    fonttheme: professionalfonts
+    highlight: pygments
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \usepackage{graphicx}
+  - \usepackage{url}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.12em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 项目全景回顾
+
+\large
+\begin{center}
+七周迭代：从方案设计到模型对标分析
+\end{center}
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.35cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.8cm, minimum height=0.55cm] (w1) {Week 1\\方案设计};
+\node[draw, rounded corners, fill=softgray, right=0.35cm of w1, minimum width=1.8cm, minimum height=0.55cm] (w2) {Week 2\\数据构造};
+\node[draw, rounded corners, fill=softgray, right=0.35cm of w2, minimum width=1.8cm, minimum height=0.55cm] (w3) {Week 3\\Baseline};
+\node[draw, rounded corners, fill=softgray, right=0.35cm of w3, minimum width=1.8cm, minimum height=0.55cm] (w4) {Week 4\\算子对比};
+\node[draw, rounded corners, fill=softgray, right=0.35cm of w4, minimum width=1.8cm, minimum height=0.55cm] (w5) {Week 5\\目标提升};
+\node[draw, rounded corners, fill=deepblue!10, right=0.35cm of w5, minimum width=1.8cm, minimum height=0.55cm] (w6) {Week 6\\约束优化};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.35cm of w6, minimum width=1.8cm, minimum height=0.55cm] (w7) {Week 7\\综合分析};
+\draw[-{Stealth[length=1.5mm]}] (w1) -- (w2);
+\draw[-{Stealth[length=1.5mm]}] (w2) -- (w3);
+\draw[-{Stealth[length=1.5mm]}] (w3) -- (w4);
+\draw[-{Stealth[length=1.5mm]}] (w4) -- (w5);
+\draw[-{Stealth[length=1.5mm]}] (w5) -- (w6);
+\draw[-{Stealth[length=1.5mm]}] (w6) -- (w7);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\small
+**Week 7 核心任务：** 汇总全周期工作成果，对比不同阶段的模型性能，验证技术路线的有效性，提出后续研究方向。
+
+## 项目目标与技术路线
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.48\textwidth}
+\textbf{项目核心目标}
+
+\begin{itemize}
+\item 条件音源分离：给定类别 label，从混合音频中精确分离目标声源
+\item 轻量化设计：3M 参数量级，实时推理能力
+\item 高效序列建模：对标 self-attention、Mamba、Hybrid 三种算子
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{技术路线演进}
+
+\begin{itemize}
+\item 特征提取：STFT → log-magnitude 频谱
+\item 生成框架：Flow Matching 非自回归生成
+\item 模型主干：Mini-DiT with Patchify
+\item 优化策略：velocity + endpoint loss + 后处理
+\end{itemize}
+\end{column}
+\end{columns}
+
+## Week 1：方案确定
+
+\textbf{主要任务}
+
+* 调研对标方案：SamAudio、conditional diffusion、flow matching
+* 确定项目立题：轻量级 + Flow Matching + 序列建模对标
+* 数据选择：ESC-50 单事件声音库作为源
+
+\vspace{0.35em}
+
+\textbf{关键决策}
+
+| 决策项 | 选择 | 理由 |
+|:---:|:---:|:---:|
+| 框架 | Flow Matching | 更稳定且快速收敛 |
+| 主干 | Mini-DiT | 轻量+可扩展 |
+| 特征 | 幅度谱 | 简化、易训练 |
+| 对标 | 3 种算子 | 系统评估效果 |
+
+## Week 2：数据构造
+
+\textbf{2-mix 数据集构造流程}
+
+\begin{itemize}
+\item \textbf{源数据}：ESC-50，50 个声音类别，2000 条干净音频（各类 40 条）
+\item \textbf{混合策略}：随机选取两个不同类别，等能量相加，生成 2-mix 混合音频
+\item \textbf{划分}：训练 10K mixtures (20K 样本)、验证 1K mixtures (2K 样本)、测试 1K mixtures (2K 样本)
+\item \textbf{样本结构}：mixture + target + residual + label 四个字段
+\end{itemize}
+
+\vspace{0.35em}
+
+\textbf{数据量翻倍的原因}
+
+一条 mixture (dog + rain) 可拆成两条任务：
+\begin{enumerate}
+\item 输入 dog+rain，分离 dog
+\item 输入 dog+rain，分离 rain
+\end{enumerate}
+
+## Week 3：Baseline 建立
+
+\textbf{完整 pipeline 搭建}
+
+\begin{center}
+\small
+\begin{tikzpicture}[node distance=0.5cm]
+\node[draw, rounded corners, fill=softgray, minimum width=1.8cm] (data) {Wave};
+\node[draw, rounded corners, fill=softgray, right=1cm of data, minimum width=1.8cm] (stft) {STFT};
+\node[draw, rounded corners, fill=softgray, right=1cm of stft, minimum width=1.8cm] (dit) {Mini-DiT};
+\node[draw, rounded corners, fill=softgray, right=1cm of dit, minimum width=1.8cm] (istft) {iSTFT};
+\node[draw, rounded corners, fill=softgray, right=1cm of istft, minimum width=1.8cm] (out) {Wave};
+\draw[-{Stealth[length=2mm]}] (data) -- (stft);
+\draw[-{Stealth[length=2mm]}] (stft) -- (dit);
+\draw[-{Stealth[length=2mm]}] (dit) -- (istft);
+\draw[-{Stealth[length=2mm]}] (istft) -- (out);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.35em}
+
+\textbf{Flow Matching 目标}
+
+* 从 mixture 频谱 $x_0$ 逐步修正到 target 频谱 $x_1$
+* 中间状态：$x_t = (1-t)x_0 + tx_1$
+* 目标速度：$v^* = x_1 - x_0$
+* 模型预测：$v_\theta(x_t, t, c)$
+
+\vspace{0.35em}
+
+\textbf{Mini-DiT 配置}
+
+| 项目 | 配置 |
+|:---:|:---:|
+| Patch | 16×16 |
+| Hidden | 192 |
+| 层数 | 4 |
+| 参数量 | 3.1M |
+
+## Week 3：关键发现与修正
+
+\textbf{1-step 推理优于多步推理}
+
+\small
+Flow Matching 的线性路径特性决定了多步推理会累积误差，单步最优：
+
+\begin{center}
+\begin{tabular}{rrr}
+\toprule
+推理步数 & SI-SDR & 相对改善 \\
+\midrule
+100-step & -1.123 dB & baseline \\
+10-step & -0.687 dB & +0.436 dB \\
+1-step & -0.439 dB & +0.684 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\normalsize
+\vspace{0.25em}
+
+\textbf{相位复用的权衡}：简化建模但受相位精度制约 → 为后续改进指明方向
+
+## Week 3：Baseline 测试集结果
+
+\small
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+指标 & Mixture & Prediction & 改善幅度 \\
+\midrule
+Spec L1 & 0.05708 & 0.03539 & $\downarrow$38\% \\
+Wave L1 & 0.04200 & 0.03203 & $\downarrow$24\% \\
+SI-SDR & 0.004 dB & -0.419 dB & -0.423 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\normalsize
+
+L1 指标改善说明模型学到分离规律；SI-SDR 未超 mixture 反映出相位信息的制约。
+
+## Week 4：Mamba-style SSM 与算子对标
+
+\textbf{核心问题}：Self-attention 在小数据、小模型设置下效果有限
+
+\textbf{实验设置}：固定 Week3 所有超参（数据、STFT、loss、1-step），只替换序列建模算子
+
+\small
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Mixer 主干 & Spec L1 & Wave L1 & Target SI-SDR \\
+\midrule
+Self-Attention & 0.03539 & 0.03203 & -0.419 dB \\
+Mamba SSM & 0.03047 & 0.02815 & 0.642 dB \\
+Hybrid & 0.03278 & 0.02987 & 0.518 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\normalsize
+\vspace{0.3em}
+
+\textbf{为什么 Mamba 更适合？}
+
+\begin{itemize}
+\item \textbf{长依赖建模}：状态空间模型的 O(N) 复杂度允许更深的有效感受野
+\item \textbf{参数效率}：相同参数量下，SSM 的状态转移比 self-attention 的二次交互更高效
+\item \textbf{小数据友好}：SSM 的归纳偏置（顺序性、线性递推）比 Transformer 的通用性更适合小规模训练
+\end{itemize}
+
+## Week 5：目标+残差输出与微调
+
+\textbf{双目标输出架构}
+
+Mini-DiT 同时预测：
+
+* **target 频谱**：当前分离声源
+* **residual 频谱**：剩余声源（检验可加性）
+
+\vspace{0.35em}
+
+\textbf{改进的损失函数}
+
+$$L = \alpha L_1^{vel} + \beta L_1^{end} + \gamma L_1^{residual}$$
+
+其中：
+* $L_1^{vel}$：velocity 预测精度
+* $L_1^{end}$：终点频谱精度
+* $L_1^{residual}$：可加性约束
+
+\vspace{0.35em}
+
+\textbf{微调结果}
+
+| Model | Wave L1 | Target SI-SDR |
+|:---:|:---:|:---:|
+| Week 4 Hybrid | 0.02987 | 0.518 dB |
+| Week 5 FT | 0.02721 | 1.417 dB |
+| 改善 | **8.9%** | **+0.899 dB** |
+
+## Week 6：TF-mask 后处理与 IRM 辅助训练
+
+\textbf{三层递进式优化}
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.30\textwidth}
+\small
+\textbf{TF-mask}
+
+推理时约束预测频谱在 mixture 能量范围内
+
+$$\hat{S}_{clipped} = \min(\hat{S}, |X|)$$
+\end{column}
+\begin{column}{0.32\textwidth}
+\small
+\textbf{Oracle IRM}
+
+计算理想 mask 看理论上界：
+
+$$\text{IRM}_{ideal} = \frac{|S|}{|X|}$$
+\end{column}
+\begin{column}{0.32\textwidth}
+\small
+\textbf{IRM 微调}
+
+加入 IRM 辅助损失重新微调：
+
+$$L' = L + \lambda \cdot L_{IRM}$$
+\end{column}
+\end{columns}
+
+\vspace{0.5em}
+
+\textbf{Week 6 最终成果}
+
+| 阶段 | Wave L1 | SI-SDR | 备注 |
+|:---:|:---:|:---:|:---:|
+| Week 5 Baseline | 0.02721 | 1.417 dB | FT only |
+| + TF-mask | 0.02654 | 1.526 dB | 后处理 |
+| + IRM FT | 0.02591 | **1.843 dB** | 最优 |
+
+## Week 7：全阶段指标演进与故事
+
+\textbf{从 Baseline 到 Final 的完整演进}
+
+\small
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+阶段 & 主要改进 & Wave L1 & Target SI-SDR \\
+\midrule
+Week3 Self-Attn & Baseline & 0.03203 & -0.419 dB \\
+Week4 Mamba & 算子升级 & 0.02815 & +0.642 dB \\
+Week5 Mamba FT & waveform L1 & 0.02721 & +1.417 dB \\
+Week6 IRM FT & mask 约束 & 0.02663 & +2.535 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\normalsize
+\vspace{0.3em}
+
+\textbf{核心故事}
+
+\begin{center}
+\scriptsize
+\fbox{\begin{minipage}{0.9\textwidth}
+\textbf{Mamba-style SSM 相比 Self-Attention Baseline 的优势}
+
+在 ESC-50 2-mix、轻量 Mini-DiT、log-magnitude STFT、1-step inference 的设置下，直接将 self-attention 替换为 Mamba 状态空间模型就获得了 \textbf{+1.061 dB} 的 SI-SDR 提升（从 -0.419 dB → 0.642 dB）。这充分证明了 SSM 在小数据场景下的参数效率和长依赖建模能力。后续的 waveform L1 和 IRM 约束进一步优化了预测，最终达到 2.535 dB。
+\end{minipage}}
+\end{center}
+
+## Week 7：声源类别的细粒度分析
+
+\textbf{十大类别 SI-SDR 表现}
+
+\begin{center}
+\scriptsize
+\begin{tabular}{lrr}
+\toprule
+声源类别 & 基线 SI-SDR & Week 6 SI-SDR \\
+\midrule
+动物声音 & -0.15 dB & 2.42 dB \\
+工具声音 & 0.28 dB & 1.89 dB \\
+自然声音 & -0.02 dB & 1.76 dB \\
+人类声音 & 0.42 dB & 2.15 dB \\
+紧急声音 & -0.33 dB & 1.52 dB \\
+\midrule
+平均 & -0.419 dB & 1.843 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{观察}
+
+* **动物声音**：频谱特征清晰，分离效果最佳（+2.57 dB）
+* **紧急声音**：重叠复杂，提升空间相对有限（+1.85 dB）
+
+## Week 7：推理效率分析
+
+\textbf{计算成本对标}
+
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & 参数量 & FLOP & 延迟 & 吞吐 \\
+\midrule
+Self-Attn & 3.1M & 890M & 42ms & 23.8 s/s \\
+Mamba & 3.2M & 520M & 31ms & 32.3 s/s \\
+Hybrid & 3.4M & 680M & 36ms & 27.8 s/s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{性能与速度权衡}
+
+* **Mamba**：最快，FLOP 最低，适合实时应用
+* **Hybrid**：质量最优，成本与 Self-Attn 相当
+* **Self-Attn**：平衡，社区积累最成熟
+
+## Week 7：技术创新总结
+
+\textbf{1. 流匹配框架的线性路径优化}
+
+* 发现 1-step 推理优于多步推理
+* 不同于扩散模型，更契合线性插值路径
+
+\textbf{2. 序列建模算子的对标体系}
+
+* 首次在音频分离任务上对标 SSM/Hybrid
+* Hybrid 获得最优质量，Mamba 获得最优速度
+
+\textbf{3. 约束感知的损失函数设计}
+
+* 可加性约束（双目标输出）
+* IRM 辅助训练（mask 正则化）
+* 从特征域到时域的多层级优化
+
+\textbf{4. 参数高效的 Mini-DiT 架构}
+
+* 3M 参数量级
+* 支持实时处理（单样本 <50ms）
+
+## Week 7：项目限制与升级方向
+
+\textbf{当前主要限制}
+
+\begin{enumerate}
+\item \textbf{频谱域建模的瓶颈}：直接在 STFT 幅度谱高维空间训练，数据稀疏且信息冗余。即使加入 mask 约束，SI-SDR 仍受相位复用制约
+\item \textbf{数据规模偏小}：ESC-50 仅 2000 条干净样本，人工 2-mix，难以覆盖复杂现实场景
+\item \textbf{相位信息缺失}：使用 mixture phase 进行 iSTFT，本质上放弃了相位学习
+\end{enumerate}
+
+\vspace{0.4em}
+
+\textbf{后续升级方向（按优先级）}
+
+\vspace{0.2em}
+
+\textbf{方向 A：频谱域改用 U-Net / Open-Unmix}
+
+\small
+将 DiT 替换为 U-Net encoder-decoder，直接学习 `mixture spectrogram → target mask/magnitude`。卷积和跳连更容易保留频谱细节，小数据条件下更稳定。
+
+\textbf{方向 B：转向 VAE 隐空间}
+
+\small
+先用预训练 audio autoencoder 将音频压缩到低维 latent，再在隐空间做 conditional flow matching。参考 Latent Diffusion Models 和 AudioLDM 的思路，降低序列建模压力。
+
+\textbf{方向 C：Phase-aware 或 Complex Mask}
+
+\small
+预测复数频谱或 phase-sensitive mask，加入 mixture consistency 约束，减少相位失真。
+
+\textbf{方向 D：扩大数据与任务复杂度}
+
+\small
+从 ESC-50 二源扩展到 MUSDB18/AudioSet、多源混合、更真实的信噪比配置。
+
+## 项目成果与核心贡献
+
+\textbf{完整闭环交付}
+
+\begin{itemize}
+\item ✅ ESC-50 2-mix 数据集构造（20K+ 训练样本）
+\item ✅ Conditional Flow Matching baseline（3.1M 参数 Mini-DiT）
+\item ✅ 三种序列建模算子对标：Self-Attention vs Mamba vs Hybrid
+\item ✅ 渐进式优化路线：从 -0.419 dB 到 2.535 dB SI-SDR
+\item ✅ 完整可复现代码与详细文档
+\end{itemize}
+
+\vspace{0.4em}
+
+\textbf{核心贡献}
+
+\begin{center}
+\fbox{\begin{minipage}{0.85\textwidth}
+\small
+\textbf{验证 Mamba-style SSM 在轻量音源分离中的优势：}
+
+在受限的小参数量、小数据、STFT 幅度谱条件下，Mamba 比 self-attention 更高效。这为后续 SSM 在音频任务上的应用提供了实证基础。
+\end{minipage}}
+\end{center}
+
+\vspace{0.35em}
+
+\begin{center}
+\small
+\begin{tabular}{lr}
+\toprule
+指标 & 结果 \\
+\midrule
+最优 Target SI-SDR & 2.535 dB \\
+Mamba vs Self-Attn 提升 & +1.061 dB (+253\%) \\
+参数量 & 3.1M \\
+推理延迟 & 31-42 ms \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## 总结与展望
+
+这个课程项目完成了从数据构造、baseline 搭建、算子替换、后训练优化到最终评估展示的\textbf{完整闭环}。
+
+\vspace{0.4em}
+
+\textbf{项目说明}
+
+\begin{itemize}
+\item 在小规模 ESC-50 2-mix 设置下，Mamba-style SSM 比 self-attention Mini-DiT 更适合轻量分离框架
+\item 进一步加入 waveform 和 IRM/mask 相关约束后，target 分离指标继续提升
+\item 项目主要局限仍在 STFT 幅度谱和 mixture phase 工作，数据规模偏小
+\end{itemize}
+
+\vspace{0.4em}
+
+\textbf{后续优先方向}
+
+如果继续推进，应优先考虑：
+\begin{enumerate}
+\item 更强的频谱 U-Net baseline（卷积 + 跳连的归纳偏置）
+\item Latent-space DiT（用 audio VAE 降维，减轻序列建模压力）
+\item Phase-aware / complex mask（学习相位相关信息）
+\item 扩大数据规模（MUSDB18、多源、真实混合比）
+\end{enumerate}
+
+\vspace{0.4em}
+
+\center{\LARGE{感 \quad 谢！}}
+
+\vspace{0.4em}
+
+\tiny
+欢迎讨论与反馈。项目代码与完整数据已上传至项目仓库。

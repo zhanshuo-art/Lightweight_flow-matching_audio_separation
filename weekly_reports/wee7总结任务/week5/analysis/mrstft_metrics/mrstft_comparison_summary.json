@@ -1,0 +1,44 @@
+{
+  "rows": [
+    {
+      "model": "Week4 Mamba",
+      "checkpoint": "D:\\evado_onedrive\\OneDrive\\Desktop\\通识公选课\\深度学习入门\\深度学习大作业\\week4\\runs\\minidit_mamba_v1_bs48\\checkpoints\\best.pt",
+      "checkpoint_epoch": 40,
+      "checkpoint_best_val_loss": 0.01978204354998611,
+      "num_steps": 1,
+      "num_samples": 2000,
+      "mixture_target_mrstft_l1": 0.15405310030514374,
+      "mixture_target_mrstft_l1_1024": 0.18829585903324186,
+      "mixture_target_mrstft_l1_256": 0.12276556556858122,
+      "mixture_target_mrstft_l1_512": 0.15109787583537398,
+      "prediction_residual_mrstft_l1": 0.0824838199284859,
+      "prediction_residual_mrstft_l1_1024": 0.10173774771136232,
+      "prediction_residual_mrstft_l1_256": 0.06544131278409622,
+      "prediction_residual_mrstft_l1_512": 0.08027239972446114,
+      "prediction_target_mrstft_l1": 0.07982778468704782,
+      "prediction_target_mrstft_l1_1024": 0.09798321155039594,
+      "prediction_target_mrstft_l1_256": 0.06377564200828784,
+      "prediction_target_mrstft_l1_512": 0.0777245004249271
+    },
+    {
+      "model": "Week5 Mamba FT",
+      "checkpoint": "D:\\evado_onedrive\\OneDrive\\Desktop\\通识公选课\\深度学习入门\\深度学习大作业\\week5\\runs\\mamba_waveform_ft_v1\\checkpoints\\best.pt",
+      "checkpoint_epoch": 10,
+      "checkpoint_best_val_loss": 0.01961512203243646,
+      "num_steps": 1,
+      "num_samples": 2000,
+      "mixture_target_mrstft_l1": 0.15405310030514374,
+      "mixture_target_mrstft_l1_1024": 0.18829585903324186,
+      "mixture_target_mrstft_l1_256": 0.12276556556858122,
+      "mixture_target_mrstft_l1_512": 0.15109787583537398,
+      "prediction_residual_mrstft_l1": 0.08337511059362442,
+      "prediction_residual_mrstft_l1_1024": 0.10295682242931799,
+      "prediction_residual_mrstft_l1_256": 0.06600445833406411,
+      "prediction_residual_mrstft_l1_512": 0.08116405139164999,
+      "prediction_target_mrstft_l1": 0.08103233433677814,
+      "prediction_target_mrstft_l1_1024": 0.09964802658371627,
+      "prediction_target_mrstft_l1_256": 0.06450732080638409,
+      "prediction_target_mrstft_l1_512": 0.07894165545352734
+    }
+  ]
+}

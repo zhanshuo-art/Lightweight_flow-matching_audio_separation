@@ -1,0 +1,293 @@
+---
+title: "Week 6：TF-mask 后处理与 IRM 辅助微调"
+short-title: "Week 6 TF-mask"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离模型研究"
+author: "深度学习自选题小组 潘羽"
+institute: "深度学习入门课程大作业"
+date: "2026年6月5日"
+fontsize: 10pt
+output:
+  beamer_presentation:
+    latex_engine: xelatex
+    template: beamer_default.tex
+    fonttheme: professionalfonts
+    highlight: pygments
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \usepackage{graphicx}
+  - \usepackage{url}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.12em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组\quad 潘羽}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 本周主线
+
+\large
+\begin{center}
+Week5 模型已经能预测 target 声源，Week6 尝试用 mask 约束让预测更准。
+\end{center}
+\normalsize
+
+\vspace{0.35em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.42cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.95cm, minimum height=0.62cm] (w5) {Week 5\\Mamba FT};
+\node[draw, rounded corners, fill=deepblue!10, right=0.48cm of w5, minimum width=2.15cm, minimum height=0.62cm] (mask) {TF-mask\\推理后修正};
+\node[draw, rounded corners, fill=warngold!15, right=0.48cm of mask, minimum width=2.25cm, minimum height=0.62cm] (oracle) {Oracle IRM\\看理论上界};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.48cm of oracle, minimum width=2.20cm, minimum height=0.62cm] (ft) {IRM 微调\\训练时加约束};
+\draw[-{Stealth[length=2mm]}] (w5) -- (mask);
+\draw[-{Stealth[length=2mm]}] (mask) -- (oracle);
+\draw[-{Stealth[length=2mm]}] (oracle) -- (ft);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{itemize}
+\item \textbf{TF-mask}：推理后把预测拉回 mixture 的能量范围内，不重新训练。
+\item \textbf{Oracle IRM}：用真实标注算出理想 mask，看理论上还有多少提升空间。
+\item \textbf{IRM 微调}：空间足够大，就把理想 mask 作为辅助训练目标加进去。
+\end{itemize}
+
+## 到 Week 5 为止
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.54\textwidth}
+\textbf{前面几周已经完成}
+\begin{itemize}
+\item Week 3：self-attention Mini-DiT baseline。
+\item Week 4：将底层算子换成 Mamba-style SSM。
+\item Week 5：加入 waveform L1，补齐 target + residual 输出。
+\end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+\textbf{Week 6 接着做}
+\begin{itemize}
+\item 不改主干，不换算子。
+\item 只看 target 预测还能不能通过 mask 约束继续提升。
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.6em}
+
+\begin{center}
+\scriptsize
+\resizebox{0.76\textwidth}{!}{%
+\begin{tabular}{lrrr}
+\toprule
+Week5 model & Spec $\downarrow$ & Wave $\downarrow$ & Target SI-SDR $\uparrow$ \\
+\midrule
+Mamba FT & 0.03097 & 0.02721 & 1.417 dB \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+
+\vspace{0.35em}
+
+\small
+Week 6 的所有比较都固定 test split、1-step inference 和同一 Week5 checkpoint。
+\normalsize
+
+## TF-mask：给预测加一个物理约束
+
+\textbf{核心思路}：模型可能预测出比混合信号还大的幅度，这在物理上不合理。TF-mask 把预测幅度限制在混合信号的范围内。
+
+\vspace{0.3em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\small, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.8cm, minimum height=0.65cm] (pred) {模型预测\\target 幅度};
+\node[draw, rounded corners, fill=deepblue!10, right=0.6cm of pred, minimum width=2.5cm, minimum height=0.65cm] (mask) {计算比例\\pred / mix};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.6cm of mask, minimum width=2.8cm, minimum height=0.65cm] (clip) {截断到 [0,1]\\乘回 mix 幅度};
+\draw[-{Stealth[length=2mm]}] (pred) -- (mask);
+\draw[-{Stealth[length=2mm]}] (mask) -- (clip);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.3em}
+
+$$
+\text{mask} = \mathrm{clip}\!\left(\frac{|\widehat{S}_{target}|}{|S_{mix}|+\epsilon},\;0,\;1\right), \quad
+|\widehat{S}_{target}^{new}| = \text{mask} \times |S_{mix}|
+$$
+
+\vspace{0.3em}
+
+\begin{itemize}
+\item 不重新训练，只在推理后做一步修正。
+\item 本质上是把模型输出从"自由预测"变成"在 mixture 里分配能量"。
+\end{itemize}
+
+## 后处理结果与 Oracle 上界
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.56\textwidth}
+\begin{center}
+\includegraphics[width=\textwidth]{figure/week6_tfmask_only_metrics.png}
+\end{center}
+\end{column}
+\begin{column}{0.40\textwidth}
+\textbf{后处理效果}
+
+TF-mask 带来小幅稳定提升：
+
+Target SI-SDR $1.417 \rightarrow 1.431$
+
+\vspace{0.5em}
+
+\textbf{Oracle IRM 上界}
+
+\vspace{0.2em}
+
+\begin{tabular}{lr}
+\toprule
+指标 & Oracle \\
+\midrule
+T-SI-SDR & 14.87 dB \\
+R-SI-SDR & 14.36 dB \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.5em}
+
+差距约 13 dB，说明模型还有很大空间可以学得更好。
+\end{column}
+\end{columns}
+
+## IRM 微调：让模型在训练时学习打分
+
+\textbf{思路}：后处理提升有限，但 Oracle 显示上界很高。因此把理想 mask 作为辅助训练目标加入 loss。
+
+\vspace{0.3em}
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.48\textwidth}
+\textbf{理想比例 mask（IRM）}
+
+"目标声源能量越大的时频格，权重越接近 1"：
+
+$$
+M_{IRM}=
+\frac{|S_{target}|^2}
+{|S_{target}|^2+|S_{residual}|^2+\epsilon}
+$$
+
+训练时让模型输出的 mask 接近这个理想值。
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{训练设置}
+\begin{itemize}
+\item 从 Week5 best.pt 继续训练 5 epoch。
+\item 学习率 $3\times10^{-5}$，其余不变。
+\item 在原有 loss 后面加一项：
+\end{itemize}
+
+$$
+\mathcal{L}_{total}
+= \mathcal{L}_{flow}
++ 0.1\,\mathcal{L}_{wave}
++ 0.1\,\mathcal{L}_{IRM}
+$$
+
+验证集最优出现在 epoch 2。
+\end{column}
+\end{columns}
+
+## Week 6 最终结果
+
+\begin{center}
+\includegraphics[width=0.88\textwidth]{figure/week6_irm_ft_metrics.png}
+\end{center}
+
+\vspace{0.2em}
+
+\begin{center}
+\small
+金色是 Oracle IRM 上界（理论最优），蓝色是实际模型结果。
+\end{center}
+
+## 主结果表与分析
+
+\begin{center}
+\scriptsize
+\resizebox{0.94\textwidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule
+Model & Spec $\downarrow$ & Wave $\downarrow$ & T-SI-SDR $\uparrow$ & R-SI-SDR $\uparrow$ \\
+\midrule
+Week5 Mamba FT & 0.03097 & 0.02721 & 1.417 & 1.975 \\
+Week6 TF-mask only & 0.03067 & 0.02718 & 1.431 & 1.984 \\
+Week6 IRM FT + TF-mask & \textbf{0.03064} & \textbf{0.02663} & \textbf{2.535} & 1.273 \\
+\bottomrule
+\end{tabular}
+}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{itemize}
+\item Target SI-SDR 提升约 \textbf{1.12 dB}，Wave L1 和 Spec L1 也同步变好。
+\item Residual SI-SDR 下降是因为训练只约束了 target，residual 仍由减法得到。
+\item 数据集中每个 mixture 的两个声源可以轮流作为 target，所以 target 预测质量是核心指标。
+\end{itemize}
+
+## Week 6 小结
+
+\begin{itemize}
+\item 简单 TF-mask 后处理可以带来小幅稳定增益。
+\item Oracle IRM 显示 mask 空间还有很大上界（约 13 dB 差距）。
+\item 加入 IRM 辅助 loss 后，target 质量明显提升。
+\item 这是本项目最后一次模型训练，后面进入最终收尾。
+\end{itemize}
+
+\[
+\text{Target SI-SDR: } 1.417 \rightarrow 2.535 \text{ dB}
+\]
+
+\[
+\text{Target Wave L1: } 0.02721 \rightarrow 0.02663
+\]
+
+\vspace{0.45em}
+
+\begin{center}
+\large
+核心结论：mask 约束提升了给定 label 后的 target 预测质量。
+\end{center}
+\normalsize
+
+## Week 7 做什么
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+任务 & 重点 \\
+\midrule
+最终主表 & 纳入 Week3/4/5/6 的统一指标 \\
+最终报告 & 讲清楚 Mamba、waveform loss、TF-mask 的关系 \\
+最终展示稿 & 控制篇幅，重点放结果和边界 \\
+复现材料 & 路径、checkpoint、命令、试听页入口 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{itemize}
+\item Week6 是最后一次训练；Week7 不再新增模型训练。
+\item 报告中保留 residual 的边界说明。
+\item 后续工作可以写：target/residual 双输出头，或显式 residual loss。
+\end{itemize}

@@ -1,0 +1,5 @@
+Model,Backbone,Parameters,Training Strategy,Target Spec L1,Target Wave L1,Target SI-SDR dB,Residual SI-SDR dB,Notes
+Week3 baseline,self-attention,3102529,from scratch,0.03539,0.03203,-0.419,,Original Mini-DiT baseline
+Week4 recheck,self-attention,3102529,retrain with batch size 48,0.03600,0.03378,-1.418,,Same batch protocol as Week4 Mamba
+Week4 Mamba,Mamba-style SSM,3014977,from scratch,0.03047,0.02815,0.642,1.743,Main operator replacement result
+Week5 Mamba FT,Mamba-style SSM,3014977,continued training from Week4 Mamba + waveform L1,0.03097,0.02721,1.417,1.975,Final target + residual output

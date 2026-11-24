@@ -1,0 +1,351 @@
+---
+title: "轻量级流匹配音频分离模型"
+short-title: "最终展示"
+subtitle: "基于高效序列建模的 Mini-DiT / Mamba 二源分离"
+author: "深度学习自选题小组"
+institute: "深度学习入门课程大作业"
+date: "2026年5月29日"
+fontsize: 10pt
+output:
+  beamer_presentation:
+    latex_engine: xelatex
+    template: beamer_default.tex
+    fonttheme: professionalfonts
+    highlight: pygments
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \usepackage{graphicx}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.15em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组}}
+---
+
+## 一句话概括
+
+\large
+\begin{center}
+我们用 ESC-50 构造二源混合数据，先训练 self-attention Mini-DiT baseline，再把底层序列混合算子替换为 Mamba-style SSM，最后补齐 target + residual 两路音频输出。
+\end{center}
+\normalsize
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.42cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.55cm, minimum height=0.62cm] (w1) {Week1\\定题};
+\node[draw, rounded corners, fill=deepblue!10, right=0.42cm of w1, minimum width=1.75cm, minimum height=0.62cm] (w2) {Week2\\2-mix 数据};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.42cm of w2, minimum width=1.85cm, minimum height=0.62cm] (w3) {Week3\\baseline};
+\node[draw, rounded corners, fill=softgreen!14, right=0.42cm of w3, minimum width=1.85cm, minimum height=0.62cm] (w4) {Week4\\Mamba};
+\node[draw, rounded corners, fill=warngold!14, right=0.42cm of w4, minimum width=1.95cm, minimum height=0.62cm] (w5) {Week5\\二源输出};
+\draw[-{Stealth[length=2mm]}] (w1) -- (w2);
+\draw[-{Stealth[length=2mm]}] (w2) -- (w3);
+\draw[-{Stealth[length=2mm]}] (w3) -- (w4);
+\draw[-{Stealth[length=2mm]}] (w4) -- (w5);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}
+\item 任务：给定 mixture 和 target label，分离目标声源。
+\item 创新点：在轻量 Mini-DiT 框架下比较 self-attention 与 Mamba-style SSM。
+\item 最终输出：prediction target 和 prediction residual。
+\end{itemize}
+
+## 数据构造
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.48\textwidth}
+\textbf{数据来源}
+\begin{itemize}
+\item ESC-50 环境声音数据。
+\item 选取 10 个类别。
+\item 音频统一为 16 kHz、单声道、5 秒。
+\item 官方 fold 划分：1/2/3 train，4 val，5 test。
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{2-mix 规模}
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Split & Mixtures & Records \\
+\midrule
+Train & 10,000 & 20,000 \\
+Val & 1,000 & 2,000 \\
+Test & 1,000 & 2,000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{column}
+\end{columns}
+
+\vspace{0.5em}
+
+\small
+每个 mixture 生成两条 target records，让两个声源轮流作为 target。
+\normalsize
+
+## 方法总流程
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.52cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.58cm] (mix) {mixture\\waveform};
+\node[draw, rounded corners, fill=deepblue!10, right=0.52cm of mix, minimum width=1.8cm, minimum height=0.58cm] (stft) {log-mag\\STFT};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.52cm of stft, minimum width=2.25cm, minimum height=0.58cm] (model) {Mini-DiT /\\Mamba DiT};
+\node[draw, rounded corners, fill=softgreen!14, right=0.52cm of model, minimum width=1.85cm, minimum height=0.58cm] (target) {target\\spectrogram};
+\node[draw, rounded corners, fill=warngold!14, right=0.52cm of target, minimum width=1.7cm, minimum height=0.58cm] (wav) {target\\waveform};
+\node[draw, rounded corners, fill=softgreen!14, below=0.58cm of wav, minimum width=1.95cm, minimum height=0.58cm] (res) {residual =\\mixture-target};
+\draw[-{Stealth[length=2mm]}] (mix) -- (stft);
+\draw[-{Stealth[length=2mm]}] (stft) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (target);
+\draw[-{Stealth[length=2mm]}] (target) -- (wav);
+\draw[-{Stealth[length=2mm]}] (wav) -- (res);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{itemize}
+\item 训练输入：$x_t$、mixture feature、time $t$、target label。
+\item 模型学习从 mixture spectrogram 到 target spectrogram 的 velocity。
+\item 音频重建使用 prediction magnitude + mixture phase。
+\end{itemize}
+
+## Week3：self-attention baseline
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+项目 & 设置 \\
+\midrule
+表示 & log-magnitude STFT \\
+主干 & self-attention Mini-DiT \\
+参数量 & 3,102,529 \\
+推理 & 1-step Flow Matching \\
+输出 & target spectrogram / target waveform \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+Test 指标 & Week3 baseline \\
+\midrule
+Target Spec L1 & 0.03539 \\
+Target Wave L1 & 0.03203 \\
+Target SI-SDR & -0.419 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\small
+baseline 能降低 L1，但 SI-SDR 还较弱，说明模型学到分离趋势，但质量仍有限。
+\normalsize
+
+## Week4：只换底层 mixer
+
+\large
+\begin{center}
+Week4 保持数据、任务、输入输出和推理方式基本不变，只比较 block 里的 token mixing 算子。
+\end{center}
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.7cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=rucdeepred!10, minimum width=2.3cm, minimum height=0.7cm] (attn) {Self-attention\\Mini-DiT};
+\node[draw, rounded corners, fill=softgreen!14, right=1.0cm of attn, minimum width=2.3cm, minimum height=0.7cm] (mamba) {Mamba-style SSM\\Mini-DiT};
+\node[draw, rounded corners, fill=softgray, below=0.75cm of $(attn)!0.5!(mamba)$, minimum width=3.5cm, minimum height=0.7cm] (eval) {同一 test split\\1-step inference};
+\draw[-{Stealth[length=2mm]}] (attn) -- (eval);
+\draw[-{Stealth[length=2mm]}] (mamba) -- (eval);
+\end{tikzpicture}
+\end{center}
+
+\small
+结论只针对当前轻量 Mini-DiT 设置，不扩展为所有 Mamba 都优于所有 attention。
+\normalsize
+
+## Week4 结果
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Model & Spec L1 $\downarrow$ & Wave L1 $\downarrow$ & SI-SDR $\uparrow$ \\
+\midrule
+Self-attention recheck & 0.03600 & 0.03378 & -1.418 \\
+Mamba-style SSM & 0.03047 & 0.02815 & 0.642 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.7em}
+
+\begin{itemize}
+\item 两个模型都使用 batch size 48 的正式对照。
+\item Mamba 参数量约 3.01M，self-attention 约 3.10M。
+\item Mamba 在 Spec L1、Wave L1、SI-SDR 上都更好。
+\end{itemize}
+
+## Week5：把输出补完整
+
+\begin{center}
+\begin{tabular}{p{0.28\textwidth}p{0.58\textwidth}}
+\toprule
+问题 & Week5 做法 \\
+\midrule
+训练目标偏频谱 & 保留 flow loss，加入 0.1 waveform L1 \\
+只有 target 输出 & 导出 target，并用 mixture-target 补 residual \\
+平均指标不够直观 & 增加试听页、类别分析、成功/失败案例 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+
+Week5 从 Week4 Mamba `best.pt` 继续训练：
+
+```text
+lr = 5e-5, epochs = 10
+loss = velocity_loss + endpoint_loss + 0.1 * waveform_l1
+```
+
+\small
+这里的 fine-tuning 是 continued training，不是 LoRA。
+\normalsize
+
+## 最终主结果
+
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & Params & Spec L1 $\downarrow$ & Wave L1 $\downarrow$ & SI-SDR $\uparrow$ \\
+\midrule
+Week3 Attn & 3.10M & 0.03539 & 0.03203 & -0.419 \\
+Week4 Attn & 3.10M & 0.03600 & 0.03378 & -1.418 \\
+Week4 Mamba & 3.01M & 0.03047 & 0.02815 & 0.642 \\
+Week5 Mamba FT & 3.01M & 0.03097 & 0.02721 & 1.417 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\vspace{0.4em}
+
+\begin{itemize}
+\item Week4：Mamba-style SSM 优于 self-attention 对照。
+\item Week5：Wave L1 和 SI-SDR 继续改善，Spec L1 略退。
+\item Residual SI-SDR：Week4 Mamba 1.743 dB，Week5 1.975 dB。
+\end{itemize}
+
+## Week5 补充分析
+
+\begin{center}
+\includegraphics[width=0.95\textwidth]{figure/week5_inference_steps_comparison.png}
+\end{center}
+
+\small
+512 条 test records 上，步数增加让 Spec L1 略好，但 SI-SDR 下降。当前 1-step 是更合适的默认设置，瓶颈更可能在特征表示、phase 重建或模型能力。
+\normalsize
+
+## 频谱指标与音频指标
+
+\begin{center}
+\includegraphics[width=0.78\textwidth]{figure/week5_mrstft_comparison.png}
+\end{center}
+
+\small
+MR-STFT 离线指标也显示 Week5 的频谱距离略差于 Week4。这和 Spec L1 一致，但与 Wave L1 / SI-SDR 改善形成对照，说明不同指标关注的误差不同。
+\normalsize
+
+## 类别分析
+
+\begin{center}
+\includegraphics[width=0.9\textwidth]{figure/week5_classwise_si_sdr.png}
+\end{center}
+
+\small
+类别差异明显。稳定、连续的声音更容易得到较高 SI-SDR；短促瞬态或强重叠类别更容易失败。
+\normalsize
+
+## 试听与案例
+
+\begin{center}
+\small
+\begin{tabular}{llllrr}
+\toprule
+类型 & 样例 & Mixture & Target & W4 SI-SDR & W5 SI-SDR \\
+\midrule
+成功 & sample\_10 & rain + dog & rain & 2.51 & 3.51 \\
+成功 & sample\_13 & keyboard + knock & knock & 1.39 & 2.15 \\
+失败 & sample\_00 & clock + keyboard & clock & -4.40 & -8.01 \\
+失败 & sample\_06 & glass + horn & glass & -1.61 & -4.27 \\
+边界 & sample\_01 & clock + keyboard & keyboard & -6.34 & 0.80 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\begin{itemize}
+\item 成功样例：target 改善，同时 residual SI-SDR 为正。
+\item 失败样例：瞬态声音、类别重叠、mixture phase 重建误差更明显。
+\item 边界样例：Spec L1 和 SI-SDR 可能不同向。
+\end{itemize}
+
+\smallsource{试听页：\texttt{week5/analysis/week5\_listening\_demo/index.html}}
+
+## 局限
+
+\begin{itemize}
+\item 数据规模仍是课程级：ESC-50 10 类 synthetic 2-mix。
+\item 当前模型只预测 magnitude，重建依赖 mixture phase。
+\item residual 由 `mixture - prediction target` 得到，不是独立输出头。
+\item 对照模型还不包括 Conv-TasNet、SepFormer 等强分离 baseline。
+\item 当前 Mamba 使用 PyTorch fallback 实现，不能主张速度优势。
+\end{itemize}
+
+## 最终结论
+
+\large
+\begin{center}
+在当前 ESC-50 2-mix、轻量 Mini-DiT、log-magnitude STFT、1-step inference 设置下，Mamba-style SSM 比 self-attention 对照取得更好的分离指标。
+\end{center}
+\normalsize
+
+\vspace{0.6em}
+
+\begin{itemize}
+\item Week4 回答：当前轻量 DiT 框架下，Mamba-style SSM 是更好的 mixer。
+\item Week5 回答：加入 waveform L1 后，Wave L1 和 SI-SDR 改善，并补齐 target + residual 输出。
+\item 结论边界：频谱类指标略退，当前模型还不是成熟工业级音频分离器。
+\end{itemize}
+
+## 最终交付
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+内容 & 路径 \\
+\midrule
+总入口 & \texttt{README.md} \\
+最终结果表 & \texttt{week6/final\_results\_summary.md} \\
+复现清单 & \texttt{week6/reproducibility\_checklist.md} \\
+案例分析 & \texttt{week6/failure\_case\_analysis.md} \\
+最终报告 & \texttt{week6/final\_report.md} \\
+试听页 & \texttt{week5/analysis/week5\_listening\_demo/} \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}

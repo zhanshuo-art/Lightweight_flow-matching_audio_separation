@@ -1,0 +1,345 @@
+---
+title: "Week 4：更换底层算子与创新实验"
+short-title: "Week 4 算子替换"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离模型研究"
+author: "深度学习自选题小组"
+institute: "深度学习入门课程大作业"
+date: "2026年5月28日"
+fontsize: 10pt
+output: beamer_presentation
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.15em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 本周一句话：只改一个关键变量
+
+\large
+\begin{center}
+Week 3 已经有一个能训练、能推理的 Mini-DiT 分离器。Week 4 不重做数据和任务，只把 block 里的 self-attention mixer 换成 Mamba-style SSM，看测试集音频指标是否变好。
+\end{center}
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.48cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.58cm] (w3) {Week 3\\baseline};
+\node[draw, rounded corners, fill=deepblue!10, right=0.48cm of w3, minimum width=2.2cm, minimum height=0.58cm] (fix) {数据/loss/推理\\保持不变};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.48cm of fix, minimum width=2.0cm, minimum height=0.58cm] (op) {只换 mixer\\Attn $\rightarrow$ SSM};
+\node[draw, rounded corners, fill=softgreen!14, right=0.48cm of op, minimum width=1.8cm, minimum height=0.58cm] (eval) {同一 test\\比较指标};
+\node[draw, rounded corners, fill=warngold!14, right=0.48cm of eval, minimum width=1.6cm, minimum height=0.58cm] (w5) {Week 5\\继续完善};
+\draw[-{Stealth[length=2mm]}] (w3) -- (fix);
+\draw[-{Stealth[length=2mm]}] (fix) -- (op);
+\draw[-{Stealth[length=2mm]}] (op) -- (eval);
+\draw[-{Stealth[length=2mm]}] (eval) -- (w5);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.4em}
+
+\begin{itemize}
+\item 输入、标签、loss、采样方式都沿用 Week 3。
+\item 主要变量：block 内部怎么做 token mixing。
+\item 结论口径：比较这套轻量 Mini-DiT 下的两个 mixer，不声称所有 attention 都弱于 Mamba。
+\end{itemize}
+
+## 项目到目前为止的主线
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.65cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.65cm, minimum height=0.68cm] (w1) {Week 1\\定题};
+\node[draw, rounded corners, fill=deepblue!10, right=0.65cm of w1, minimum width=1.8cm, minimum height=0.68cm] (w2) {Week 2\\2-mix 数据};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.65cm of w2, minimum width=2.0cm, minimum height=0.68cm] (w3) {Week 3\\Mini-DiT baseline};
+\node[draw, rounded corners, fill=softgreen!14, right=0.65cm of w3, minimum width=2.0cm, minimum height=0.68cm] (w4) {Week 4\\更换算子};
+\draw[-{Stealth[length=2mm]}] (w1) -- (w2);
+\draw[-{Stealth[length=2mm]}] (w2) -- (w3);
+\draw[-{Stealth[length=2mm]}] (w3) -- (w4);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+阶段 & 交付内容 & 作用 \\
+\midrule
+Week 1 & 确定轻量级流匹配音频分离 & 明确研究问题 \\
+Week 2 & ESC-50 到 2-mix 数据集 & 建立监督训练数据 \\
+Week 3 & STFT + Mini-DiT baseline & 得到可复现对照组 \\
+Week 4 & Self-Attn / Mamba-style SSM & 做创新实验和消融 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## 先回顾 Week 3：baseline 到底在做什么
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.56cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.65cm, minimum height=0.62cm] (mix) {mixture\\幅度谱};
+\node[draw, rounded corners, fill=deepblue!10, right=0.48cm of mix, minimum width=1.7cm, minimum height=0.62cm] (xt) {$x_t$\\插值状态};
+\node[draw, rounded corners, fill=warngold!12, below=0.38cm of xt, minimum width=1.7cm, minimum height=0.52cm] (cond) {$t$ + label};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.48cm of xt, minimum width=2.1cm, minimum height=0.62cm] (model) {Mini-DiT\\velocity net};
+\node[draw, rounded corners, fill=softgreen!14, right=0.48cm of model, minimum width=1.95cm, minimum height=0.62cm] (vel) {速度场\\矩阵};
+\node[draw, rounded corners, fill=softgray, right=0.48cm of vel, minimum width=1.85cm, minimum height=0.62cm] (wav) {目标音频\\重建};
+\draw[-{Stealth[length=2mm]}] (mix) -- (xt);
+\draw[-{Stealth[length=2mm]}] (xt) -- (model);
+\draw[-{Stealth[length=2mm]}] (cond) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (vel);
+\draw[-{Stealth[length=2mm]}] (vel) -- (wav);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.4em}
+
+\begin{itemize}
+\item 训练输入：$x_t$、mixture feature、时间 $t$、target label。
+\item 模型直接输出：与谱图同形状的 velocity 矩阵，音频由后处理重建。
+\item 测试时：给定 mixture 幅度谱和目标 label，从 mixture 出发一步预测目标幅度谱，再用 mixture phase 反变换成目标音频。
+\end{itemize}
+
+## 为什么选状态空间模型
+
+\begin{columns}[T,totalwidth=\linewidth]
+\begin{column}{0.48\linewidth}
+\textbf{Self-attention}
+\begin{itemize}
+\item token 两两交互，表达力强。
+\item 序列较长时计算和显存压力较大。
+\item 在小模型里，容量更多消耗在全局交互上。
+\end{itemize}
+\end{column}
+\begin{column}{0.48\linewidth}
+\textbf{Mamba-style SSM}
+\begin{itemize}
+\item 用状态递推做序列混合。
+\item 适合处理展开后的长谱图序列。
+\item 本周验证它是否更适合轻量分离器。
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.9cm, minimum height=0.55cm] (spec) {谱图 patch tokens};
+\node[draw, rounded corners, fill=deepblue!10, right=0.55cm of spec, minimum width=2.0cm, minimum height=0.55cm] (seq) {展平成序列};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.55cm of seq, minimum width=2.2cm, minimum height=0.55cm] (ssm) {SSM 状态递推};
+\node[draw, rounded corners, fill=softgreen!14, right=0.55cm of ssm, minimum width=1.9cm, minimum height=0.55cm] (out) {更新 token};
+\draw[-{Stealth[length=2mm]}] (spec) -- (seq);
+\draw[-{Stealth[length=2mm]}] (seq) -- (ssm);
+\draw[-{Stealth[length=2mm]}] (ssm) -- (out);
+\end{tikzpicture}
+\end{center}
+
+## Week 4 的实验问题
+
+\large
+\begin{center}
+把 Mini-DiT block 里的 self-attention mixer 换成 Mamba-style SSM，能否在同一数据和同一推理协议下提高分离质量？
+\end{center}
+\normalsize
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+固定项 & 实验变量 \\
+\midrule
+ESC-50 2-mix 数据划分 & block 内序列混合算子 \\
+log-magnitude STFT 表示 & self-attention / Mamba-style SSM \\
+Flow Matching 训练目标 & mixer backend \\
+1-step inference & 模型内部 token mixing \\
+test split 和指标 & 不改数据、不改评估口径 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## 这次对照怎么才算公平
+
+\small
+\begin{center}
+\begin{tabular}{p{0.25\linewidth}p{0.60\linewidth}}
+\toprule
+要控制的因素 & 本周做法 \\
+\midrule
+任务和数据 & 同一个 ESC-50 2-mix 数据划分，同一个 target label 条件输入 \\
+训练目标 & 都使用 Flow Matching 的 velocity / endpoint loss \\
+推理方式 & 都从 mixture 出发，做 1-step target prediction \\
+训练预算 & 都训练 40 epochs，batch size 都设为 48 \\
+模型规模 & 都是 4-block Mini-DiT，参数量同量级：Self-Attn 3.10M，Mamba 3.01M \\
+结论边界 & 比较当前轻量配置下的 mixer；不比较把某一方加深加宽后的上限 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\normalsize
+
+\vspace{0.4em}
+
+\begin{center}
+\color{rucdeepred}
+严谨说法：在相同任务、相同训练预算、相近参数量的 Mini-DiT 中，Mamba-style SSM 是更好的 mixer 候选。
+\end{center}
+
+## 训练设置：保证对照成立
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+项目 & 设置 \\
+\midrule
+数据 & Week 2 ESC-50 2-mix，train 20,000 / val 2,000 / test 2,000 target records \\
+表示 & log-magnitude STFT，重建沿用 mixture phase \\
+模型 & 4-block lightweight Mini-DiT \\
+训练 & 40 epochs，batch size 48 \\
+推理 & 从 mixture 出发，1-step target prediction \\
+对照 & Self-Attn bs48 vs Mamba-style SSM bs48 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\color{deepblue}
+补跑 self-attention bs48 的目的：排除“batch size 不同”对 Week4 结论的干扰。
+\end{center}
+
+## 训练曲线
+
+\begin{center}
+\includegraphics[width=0.92\linewidth]{figure/week4_training_curves.png}
+\end{center}
+
+\vspace{0.2em}
+
+\begin{itemize}
+\item 两个模型都稳定收敛，说明算子替换没有破坏 Week3 的训练链路。
+\item self-attention 的 val loss 略低，但最终音频指标反而不如 Mamba-style SSM，说明只看训练 loss 不足以判断分离质量。
+\end{itemize}
+
+## 测试集核心指标
+
+\begin{center}
+\scriptsize
+\begin{tabular}{lrrrr}
+\toprule
+模型 & best val loss & Spec L1 $\downarrow$ & Wave L1 $\downarrow$ & SI-SDR $\uparrow$ \\
+\midrule
+Mixture baseline & -- & 0.05708 & 0.04200 & 0.004 dB \\
+Self-Attn bs48 & 0.018675 & 0.03600 & 0.03378 & -1.418 dB \\
+Mamba-style SSM bs48 & 0.019782 & \textbf{0.03047} & \textbf{0.02815} & \textbf{0.642 dB} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{itemize}
+\item Mamba-style SSM 在三个测试指标上均优于同 batch self-attention。
+\item Wave L1 相对 mixture baseline 下降约 33.0\%，self-attention 对照约 19.6\%。
+\item SI-SDR 从 self-attention 的 -1.418 dB 提升到 0.642 dB。
+\end{itemize}
+
+## 指标对比图
+
+\begin{center}
+\includegraphics[width=0.92\linewidth]{figure/week4_test_metrics_comparison.png}
+\end{center}
+
+\vspace{0.2em}
+
+\begin{center}
+\color{rucdeepred}
+在这组受控实验里，Mamba-style SSM 带来了更好的分离质量；同 batch 对照排除了 batch size 的主要干扰。
+\end{center}
+
+## 样例可视化
+
+\begin{center}
+\includegraphics[width=0.88\linewidth]{figure/week4_mamba_sample_spectrogram_triplet.png}
+\end{center}
+
+\vspace{0.2em}
+
+\begin{itemize}
+\item 图中比较 mixture、target 和 prediction 的谱图。
+\item Mamba-style SSM 能把部分目标结构从混合谱图中拉出来，但细节仍不等价于真实 target。
+\end{itemize}
+
+## 这组结果怎么讲
+
+\large
+\begin{center}
+结论按实验条件来讲：在当前轻量 Mini-DiT 设置下，Mamba-style SSM 是更合适的 mixer。
+\end{center}
+\normalsize
+
+\vspace{0.55em}
+
+\begin{itemize}
+\item 对照条件：同数据、同 loss、同 batch/epoch、同 1-step 推理；参数量同量级。
+\item 测试结果：Mamba 的 Spec L1、Wave L1、SI-SDR 都优于 self-attention 对照。
+\item 结论边界：这说明 Week5 主线应继续用 Mamba；如果以后比较更大的 attention，需要重新做同预算实验。
+\end{itemize}
+
+## Week 5：把结果做完整
+
+\large
+\begin{center}
+Week 4 解决“选哪个 mixer”。Week 5 解决“分离结果能不能完整展示和评价”。
+\end{center}
+\normalsize
+
+\vspace{0.6em}
+
+\begin{itemize}
+\item 训练：从 Week4 Mamba best.pt 继续，小学习率，原 loss + waveform L1。
+\item 输出：保存 target 音频；用 residual = mixture - target 得到第二路音频。
+\item 验收：看全测试集指标、试听页和类别分析，重点关注 Wave L1 与 SI-SDR。
+\end{itemize}
+
+\vspace{0.5em}
+
+\begin{center}
+\color{rucdeepred}
+一句话：Week5 固定 Mamba 主干，补齐 target + residual 的完整二源输出。
+\end{center}
+
+## 本周交付物
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+交付物 & 路径 \\
+\midrule
+Week4 代码 & week4/scripts/modeling\_minidit.py \\
+Mamba 配置 & week4/configs/minidit\_mamba.yaml \\
+正式结果 & week4/runs/minidit\_mamba\_v1\_bs48/ \\
+对照结果 & week4/runs/minidit\_self\_attention\_recheck\_bs48/ \\
+验收记录 & week4/收尾材料/week4\_acceptance\_report.md \\
+Week5 对接 & week4/收尾材料/week5\_handoff.md \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\large
+Week 4 给出更好的主干选择；Week 5 在这个主干上补齐波形质量、残差输出和可解释分析。
+\end{center}

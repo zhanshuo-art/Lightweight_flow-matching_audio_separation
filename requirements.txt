@@ -1,0 +1,8 @@
+matplotlib>=3.8
+numpy>=1.26
+pandas>=2.0
+PyYAML>=6.0
+scipy>=1.11
+soundfile>=0.12
+torch>=2.4
+tqdm>=4.66

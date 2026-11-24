@@ -1,0 +1,15 @@
+class_a,class_b,compatible,reason
+car_horn,glass_breaking,1,semantic co-occurrence allowed by Week 2 plan
+car_horn,rain,1,semantic co-occurrence allowed by Week 2 plan
+car_horn,siren,1,semantic co-occurrence allowed by Week 2 plan
+chirping_birds,dog,1,semantic co-occurrence allowed by Week 2 plan
+chirping_birds,rain,1,semantic co-occurrence allowed by Week 2 plan
+clock_tick,door_wood_knock,1,semantic co-occurrence allowed by Week 2 plan
+clock_tick,keyboard_typing,1,semantic co-occurrence allowed by Week 2 plan
+clock_tick,vacuum_cleaner,1,semantic co-occurrence allowed by Week 2 plan
+dog,rain,1,semantic co-occurrence allowed by Week 2 plan
+door_wood_knock,glass_breaking,1,semantic co-occurrence allowed by Week 2 plan
+door_wood_knock,keyboard_typing,1,semantic co-occurrence allowed by Week 2 plan
+glass_breaking,siren,1,semantic co-occurrence allowed by Week 2 plan
+keyboard_typing,vacuum_cleaner,1,semantic co-occurrence allowed by Week 2 plan
+rain,siren,1,semantic co-occurrence allowed by Week 2 plan

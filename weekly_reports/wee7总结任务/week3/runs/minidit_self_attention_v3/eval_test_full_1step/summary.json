@@ -1,0 +1,28 @@
+{
+  "checkpoint": "/root/autodl-tmp/audiosep_project/week3/runs/minidit_self_attention_v3/checkpoints/best.pt",
+  "checkpoint_epoch": 39,
+  "checkpoint_best_val_loss": 0.013755071748048067,
+  "representation": "log_magnitude",
+  "flow_start": "mixture",
+  "split": "test",
+  "num_steps": 1,
+  "num_samples": 2000,
+  "spectrogram_l1": {
+    "mixture_mean": 0.05707760159613099,
+    "prediction_mean": 0.035394911324372516,
+    "improvement_mean": 0.02168269029108342,
+    "improved_ratio": 0.6625
+  },
+  "waveform_l1": {
+    "mixture_mean": 0.0420037932987907,
+    "prediction_mean": 0.032034005675697697,
+    "improvement_mean": 0.009969787616631948,
+    "improved_ratio": 0.697
+  },
+  "si_sdr": {
+    "mixture_mean_db": 0.004401049847714603,
+    "prediction_mean_db": -0.4194191710299929,
+    "improvement_mean_db": -0.42382022125273944,
+    "improved_ratio": 0.504
+  }
+}

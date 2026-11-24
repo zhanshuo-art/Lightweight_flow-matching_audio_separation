@@ -1,0 +1,8 @@
+{
+  "device": "cuda",
+  "train_samples": 20000,
+  "val_samples": 2000,
+  "sigma": 0.3033778903889921,
+  "parameters": 3102529,
+  "config_path": "/root/autodl-tmp/audiosep_project/week3/configs/minidit_self_attention.yaml"
+}

@@ -1,0 +1,230 @@
+{
+  "method": "tfmask_clip_0_1",
+  "num_samples": 20,
+  "mean_direct_target_si_sdr_db": 3.176731066405773,
+  "mean_direct_residual_si_sdr_db": 0.8321849005762487,
+  "mean_week6_target_si_sdr_db": 3.182879376411438,
+  "mean_week6_residual_si_sdr_db": 0.8627714700996876,
+  "samples": [
+    {
+      "sample_id": "test_000001_t0",
+      "mix_id": "test_000001",
+      "target_label": "clock_tick",
+      "residual_label": "keyboard_typing",
+      "source_pair": "clock_tick + keyboard_typing",
+      "direct_target_si_sdr_db": -7.009189128875732,
+      "direct_residual_si_sdr_db": 7.652186393737793,
+      "week6_target_si_sdr_db": -7.033250331878662,
+      "week6_residual_si_sdr_db": 7.65925407409668
+    },
+    {
+      "sample_id": "test_000001_t1",
+      "mix_id": "test_000001",
+      "target_label": "keyboard_typing",
+      "residual_label": "clock_tick",
+      "source_pair": "clock_tick + keyboard_typing",
+      "direct_target_si_sdr_db": 1.3839902877807617,
+      "direct_residual_si_sdr_db": -42.105628967285156,
+      "week6_target_si_sdr_db": 1.3896510601043701,
+      "week6_residual_si_sdr_db": -41.66267776489258
+    },
+    {
+      "sample_id": "test_000002_t0",
+      "mix_id": "test_000002",
+      "target_label": "rain",
+      "residual_label": "siren",
+      "source_pair": "rain + siren",
+      "direct_target_si_sdr_db": 2.098500967025757,
+      "direct_residual_si_sdr_db": 4.08588981628418,
+      "week6_target_si_sdr_db": 2.09234619140625,
+      "week6_residual_si_sdr_db": 4.090916633605957
+    },
+    {
+      "sample_id": "test_000002_t1",
+      "mix_id": "test_000002",
+      "target_label": "siren",
+      "residual_label": "rain",
+      "source_pair": "rain + siren",
+      "direct_target_si_sdr_db": 3.3281705379486084,
+      "direct_residual_si_sdr_db": -0.06874769181013107,
+      "week6_target_si_sdr_db": 3.3355984687805176,
+      "week6_residual_si_sdr_db": -0.06142302602529526
+    },
+    {
+      "sample_id": "test_000003_t0",
+      "mix_id": "test_000003",
+      "target_label": "keyboard_typing",
+      "residual_label": "vacuum_cleaner",
+      "source_pair": "keyboard_typing + vacuum_cleaner",
+      "direct_target_si_sdr_db": 4.207319259643555,
+      "direct_residual_si_sdr_db": 7.103457927703857,
+      "week6_target_si_sdr_db": 4.231795310974121,
+      "week6_residual_si_sdr_db": 7.106768608093262
+    },
+    {
+      "sample_id": "test_000003_t1",
+      "mix_id": "test_000003",
+      "target_label": "vacuum_cleaner",
+      "residual_label": "keyboard_typing",
+      "source_pair": "keyboard_typing + vacuum_cleaner",
+      "direct_target_si_sdr_db": 8.037367820739746,
+      "direct_residual_si_sdr_db": 5.259213447570801,
+      "week6_target_si_sdr_db": 8.040792465209961,
+      "week6_residual_si_sdr_db": 5.28339147567749
+    },
+    {
+      "sample_id": "test_000004_t0",
+      "mix_id": "test_000004",
+      "target_label": "glass_breaking",
+      "residual_label": "car_horn",
+      "source_pair": "glass_breaking + car_horn",
+      "direct_target_si_sdr_db": -0.7897634506225586,
+      "direct_residual_si_sdr_db": 13.948772430419922,
+      "week6_target_si_sdr_db": -0.7859437465667725,
+      "week6_residual_si_sdr_db": 13.950190544128418
+    },
+    {
+      "sample_id": "test_000004_t1",
+      "mix_id": "test_000004",
+      "target_label": "car_horn",
+      "residual_label": "glass_breaking",
+      "source_pair": "glass_breaking + car_horn",
+      "direct_target_si_sdr_db": 10.345295906066895,
+      "direct_residual_si_sdr_db": -9.696584701538086,
+      "week6_target_si_sdr_db": 10.348331451416016,
+      "week6_residual_si_sdr_db": -9.693013191223145
+    },
+    {
+      "sample_id": "test_000005_t0",
+      "mix_id": "test_000005",
+      "target_label": "car_horn",
+      "residual_label": "glass_breaking",
+      "source_pair": "car_horn + glass_breaking",
+      "direct_target_si_sdr_db": 8.698615074157715,
+      "direct_residual_si_sdr_db": -11.239612579345703,
+      "week6_target_si_sdr_db": 8.719910621643066,
+      "week6_residual_si_sdr_db": -11.241354942321777
+    },
+    {
+      "sample_id": "test_000005_t1",
+      "mix_id": "test_000005",
+      "target_label": "glass_breaking",
+      "residual_label": "car_horn",
+      "source_pair": "car_horn + glass_breaking",
+      "direct_target_si_sdr_db": 1.9628403186798096,
+      "direct_residual_si_sdr_db": 17.372201919555664,
+      "week6_target_si_sdr_db": 1.9703080654144287,
+      "week6_residual_si_sdr_db": 17.378103256225586
+    },
+    {
+      "sample_id": "test_000006_t0",
+      "mix_id": "test_000006",
+      "target_label": "rain",
+      "residual_label": "dog",
+      "source_pair": "rain + dog",
+      "direct_target_si_sdr_db": 6.962491035461426,
+      "direct_residual_si_sdr_db": 12.328606605529785,
+      "week6_target_si_sdr_db": 6.9656758308410645,
+      "week6_residual_si_sdr_db": 12.331637382507324
+    },
+    {
+      "sample_id": "test_000006_t1",
+      "mix_id": "test_000006",
+      "target_label": "dog",
+      "residual_label": "rain",
+      "source_pair": "rain + dog",
+      "direct_target_si_sdr_db": 5.264947891235352,
+      "direct_residual_si_sdr_db": -1.2897372245788574,
+      "week6_target_si_sdr_db": 5.312840461730957,
+      "week6_residual_si_sdr_db": -1.2927541732788086
+    },
+    {
+      "sample_id": "test_000007_t0",
+      "mix_id": "test_000007",
+      "target_label": "keyboard_typing",
+      "residual_label": "door_wood_knock",
+      "source_pair": "keyboard_typing + door_wood_knock",
+      "direct_target_si_sdr_db": -0.2996111214160919,
+      "direct_residual_si_sdr_db": -5.0460052490234375,
+      "week6_target_si_sdr_db": -0.30114901065826416,
+      "week6_residual_si_sdr_db": -4.988983631134033
+    },
+    {
+      "sample_id": "test_000007_t1",
+      "mix_id": "test_000007",
+      "target_label": "door_wood_knock",
+      "residual_label": "keyboard_typing",
+      "source_pair": "keyboard_typing + door_wood_knock",
+      "direct_target_si_sdr_db": 4.829192638397217,
+      "direct_residual_si_sdr_db": 3.26920485496521,
+      "week6_target_si_sdr_db": 4.830747127532959,
+      "week6_residual_si_sdr_db": 3.273181676864624
+    },
+    {
+      "sample_id": "test_000008_t0",
+      "mix_id": "test_000008",
+      "target_label": "vacuum_cleaner",
+      "residual_label": "clock_tick",
+      "source_pair": "vacuum_cleaner + clock_tick",
+      "direct_target_si_sdr_db": 3.316849708557129,
+      "direct_residual_si_sdr_db": 0.16407078504562378,
+      "week6_target_si_sdr_db": 3.3206889629364014,
+      "week6_residual_si_sdr_db": 0.18218228220939636
+    },
+    {
+      "sample_id": "test_000008_t1",
+      "mix_id": "test_000008",
+      "target_label": "clock_tick",
+      "residual_label": "vacuum_cleaner",
+      "source_pair": "vacuum_cleaner + clock_tick",
+      "direct_target_si_sdr_db": -2.3732616901397705,
+      "direct_residual_si_sdr_db": 2.4200847148895264,
+      "week6_target_si_sdr_db": -2.3585872650146484,
+      "week6_residual_si_sdr_db": 2.422607898712158
+    },
+    {
+      "sample_id": "test_000009_t0",
+      "mix_id": "test_000009",
+      "target_label": "siren",
+      "residual_label": "rain",
+      "source_pair": "siren + rain",
+      "direct_target_si_sdr_db": 2.068187713623047,
+      "direct_residual_si_sdr_db": 3.147801399230957,
+      "week6_target_si_sdr_db": 2.075880527496338,
+      "week6_residual_si_sdr_db": 3.152251720428467
+    },
+    {
+      "sample_id": "test_000009_t1",
+      "mix_id": "test_000009",
+      "target_label": "rain",
+      "residual_label": "siren",
+      "source_pair": "siren + rain",
+      "direct_target_si_sdr_db": 4.57036828994751,
+      "direct_residual_si_sdr_db": 3.681779146194458,
+      "week6_target_si_sdr_db": 4.562219142913818,
+      "week6_residual_si_sdr_db": 3.6799421310424805
+    },
+    {
+      "sample_id": "test_000010_t0",
+      "mix_id": "test_000010",
+      "target_label": "rain",
+      "residual_label": "chirping_birds",
+      "source_pair": "rain + chirping_birds",
+      "direct_target_si_sdr_db": 6.139716625213623,
+      "direct_residual_si_sdr_db": 5.649426460266113,
+      "week6_target_si_sdr_db": 6.140366554260254,
+      "week6_residual_si_sdr_db": 5.658042907714844
+    },
+    {
+      "sample_id": "test_000010_t1",
+      "mix_id": "test_000010",
+      "target_label": "chirping_birds",
+      "residual_label": "rain",
+      "source_pair": "rain + chirping_birds",
+      "direct_target_si_sdr_db": 0.7925926446914673,
+      "direct_residual_si_sdr_db": 0.007318523712456226,
+      "week6_target_si_sdr_db": 0.7993656396865845,
+      "week6_residual_si_sdr_db": 0.02716553956270218
+    }
+  ]
+}

@@ -1,0 +1,608 @@
+---
+title: "Week 3：从频谱图到 Mini-DiT Baseline"
+short-title: "Week 3 Baseline"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离"
+author: "深度学习自选题小组"
+institute: "深度学习入门课程大作业"
+date: "2026年5月21日"
+fontsize: 10pt
+output: beamer_presentation
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.15em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 本周要讲清楚的事情
+
+\large
+\begin{center}
+Week 3 不是只画了频谱图，而是把“数据 → 特征 → 模型 → 训练 → 评估”的 baseline 链路跑通。
+\end{center}
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.48cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.55cm, minimum height=0.55cm] (data) {Week 2\\2-mix 数据};
+\node[draw, rounded corners, fill=deepblue!10, right=0.42cm of data, minimum width=1.8cm, minimum height=0.55cm] (feat) {STFT\\频谱图};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.42cm of feat, minimum width=2.1cm, minimum height=0.55cm] (flow) {Flow Matching\\训练目标};
+\node[draw, rounded corners, fill=softgreen!14, right=0.42cm of flow, minimum width=1.9cm, minimum height=0.55cm] (model) {Mini-DiT\\baseline};
+\node[draw, rounded corners, fill=warngold!12, right=0.42cm of model, minimum width=1.7cm, minimum height=0.55cm] (eval) {验证\\测试};
+\draw[-{Stealth[length=2mm]}] (data) -- (feat);
+\draw[-{Stealth[length=2mm]}] (feat) -- (flow);
+\draw[-{Stealth[length=2mm]}] (flow) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (eval);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{itemize}
+\item 输入：Week 2 构造好的 ESC-50 2-mix 波形数据。
+\item 模型：轻量 self-attention Mini-DiT。
+\item 输出：checkpoint、样本频谱、测试集指标，以及 Week 4 的对比基准。
+\end{itemize}
+
+## 先明确任务：模型到底要分离什么
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.65cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.2cm, minimum height=0.7cm] (mix) {混合音频\\dog + rain};
+\node[draw, rounded corners, fill=warngold!12, right=0.7cm of mix, minimum width=1.8cm, minimum height=0.7cm] (cond) {条件\\dog};
+\node[draw, rounded corners, fill=deepblue!10, right=0.7cm of cond, minimum width=2.0cm, minimum height=0.7cm] (model) {分离模型};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.7cm of model, minimum width=2.0cm, minimum height=0.7cm] (out) {输出\\dog 声源};
+\draw[-{Stealth[length=2mm]}] (mix) -- (cond);
+\draw[-{Stealth[length=2mm]}] (cond) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (out);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.7em}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+如果条件是 dog & 模型应输出狗叫声 \\
+如果条件是 rain & 模型应输出雨声 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+所以本项目不是“随便生成一段声音”，而是做**条件音源分离**：给定 mixture 和目标类别，恢复对应的 target。
+
+## 项目到目前为止的路线
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.7cm] (w1) {Week 1\\确定方案};
+\node[draw, rounded corners, fill=deepblue!10, right=0.45cm of w1, minimum width=2.0cm, minimum height=0.7cm] (w2) {Week 2\\构造 2-mix};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.45cm of w2, minimum width=2.2cm, minimum height=0.7cm] (w3) {Week 3\\训练 baseline};
+\node[draw, rounded corners, fill=softgreen!14, right=0.45cm of w3, minimum width=2.0cm, minimum height=0.7cm] (w4) {Week 4\\替换算子};
+\draw[-{Stealth[length=2mm]}] (w1) -- (w2);
+\draw[-{Stealth[length=2mm]}] (w2) -- (w3);
+\draw[-{Stealth[length=2mm]}] (w3) -- (w4);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+阶段 & 已完成内容 & 目的 \\
+\midrule
+Week 1 & 选定轻量流匹配音频分离 & 明确研究问题 \\
+Week 2 & ESC-50 clean source 到 2-mix & 得到可监督训练数据 \\
+Week 3 & STFT + Mini-DiT baseline & 建立可复现对照组 \\
+Week 4 & self-attention / Mamba / hybrid & 比较底层算子 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## Week 2 数据如何进入 Week 3
+
+Week 2 已经把 ESC-50 的干净单事件声音合成为 2-mix，并按官方 fold 得到 train / val / test。
+
+\vspace{0.3em}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+split & mixture 数 & 训练记录数 \\
+\midrule
+train & 10,000 & 20,000 \\
+val & 1,000 & 2,000 \\
+test & 1,000 & 2,000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+为什么记录数是 mixture 数的 2 倍？
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.0cm, minimum height=0.55cm] (mix) {dog + rain};
+\node[draw, rounded corners, fill=deepblue!10, below left=0.5cm and 0.35cm of mix, minimum width=2.2cm, minimum height=0.55cm] (dog) {target = dog};
+\node[draw, rounded corners, fill=rucdeepred!10, below right=0.5cm and 0.35cm of mix, minimum width=2.2cm, minimum height=0.55cm] (rain) {target = rain};
+\draw[-{Stealth[length=2mm]}] (mix) -- (dog);
+\draw[-{Stealth[length=2mm]}] (mix) -- (rain);
+\end{tikzpicture}
+\end{center}
+
+## 一条训练样本包含什么
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+字段 & 含义 & 给模型的作用 \\
+\midrule
+mixture & 两个声源相加后的音频 & 输入条件 \\
+target & 当前要分离的那个声源 & 训练答案 \\
+residual & 剩下的另一个声源 & 检查可加性 \\
+label & target 的类别名称 & 告诉模型分离谁 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.7em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.55cm] (mix) {mixture};
+\node[draw, rounded corners, fill=deepblue!10, right=0.5cm of mix, minimum width=1.5cm, minimum height=0.55cm] (tgt) {target};
+\node[draw, rounded corners, fill=rucdeepred!8, right=0.5cm of tgt, minimum width=1.7cm, minimum height=0.55cm] (res) {residual};
+\node[draw, rounded corners, fill=softgreen!14, right=0.5cm of res, minimum width=1.6cm, minimum height=0.55cm] (label) {label};
+\draw[-{Stealth[length=2mm]}] (mix) -- (tgt);
+\draw[-{Stealth[length=2mm]}] (tgt) -- (res);
+\draw[-{Stealth[length=2mm]}] (res) -- (label);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.4em}
+
+这和 SamAudio 的训练组织思路对齐：模型看到 mixture，同时知道要恢复哪个 target。
+
+## 为什么要把波形转成频谱图
+
+\begin{columns}[T,totalwidth=\linewidth]
+\begin{column}{0.43\linewidth}
+\small
+原始波形的问题：
+
+\begin{itemize}
+\item 5 秒音频有 80,000 个采样点
+\item 序列太长，直接训练成本高
+\item 声音结构不容易肉眼观察
+\end{itemize}
+
+\vspace{0.4em}
+
+频谱图的好处：
+
+\begin{itemize}
+\item 横轴是时间
+\item 纵轴是频率
+\item 颜色代表能量强弱
+\end{itemize}
+\end{column}
+\begin{column}{0.55\linewidth}
+\includegraphics[width=\linewidth]{figure/week3_spectrogram_pipeline.png}
+\end{column}
+\end{columns}
+
+\smallsource{可以把频谱图理解成“声音的图片”，更适合轻量模型处理。}
+
+## STFT 和 log-magnitude 做了什么
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.55cm] (wav) {waveform};
+\node[draw, rounded corners, fill=deepblue!10, right=0.5cm of wav, minimum width=1.6cm, minimum height=0.55cm] (stft) {STFT};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.5cm of stft, minimum width=2.0cm, minimum height=0.55cm] (mag) {取幅度谱};
+\node[draw, rounded corners, fill=softgreen!14, right=0.5cm of mag, minimum width=2.1cm, minimum height=0.55cm] (log) {log 压缩};
+\draw[-{Stealth[length=2mm]}] (wav) -- (stft);
+\draw[-{Stealth[length=2mm]}] (stft) -- (mag);
+\draw[-{Stealth[length=2mm]}] (mag) -- (log);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+步骤 & 作用 \\
+\midrule
+STFT & 把声音拆成“时间 × 频率”的表示 \\
+取幅度谱 & 保留每个频率位置的能量强弱 \\
+log(1 + 幅度) & 压缩过大的能量值，让训练更稳定 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3em}
+
+正式输入大小为 $[1, 513, 313]$：1 个幅度通道，513 个频率 bin，313 个时间帧。
+
+## 注意：正式 baseline 没有直接建模相位
+
+STFT 原本是复数，包含两类信息：
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+信息 & 含义 & Week 3 正式 baseline \\
+\midrule
+magnitude & 每个频率成分有多强 & 直接预测 \\
+phase & 频率成分如何在时间上对齐 & 复用 mixture phase \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+所以正式 baseline 的重建过程是：
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.5cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=deepblue!10, minimum width=2.1cm, minimum height=0.55cm] (pred) {预测 magnitude};
+\node[draw, rounded corners, fill=warngold!12, right=0.5cm of pred, minimum width=2.0cm, minimum height=0.55cm] (phase) {mixture phase};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.5cm of phase, minimum width=1.8cm, minimum height=0.55cm] (istft) {iSTFT};
+\node[draw, rounded corners, fill=softgreen!14, right=0.5cm of istft, minimum width=1.8cm, minimum height=0.55cm] (wav) {音频输出};
+\draw[-{Stealth[length=2mm]}] (pred) -- (phase);
+\draw[-{Stealth[length=2mm]}] (phase) -- (istft);
+\draw[-{Stealth[length=2mm]}] (istft) -- (wav);
+\end{tikzpicture}
+\end{center}
+
+\smallsource{这能降低建模难度，但也解释了为什么当前 SI-SDR 仍然有限。}
+
+## Flow Matching 的直觉：学一条修正路径
+
+\large
+\begin{center}
+模型不是从零生成声音，而是学习如何把 mixture 频谱逐步修正成 target 频谱。
+\end{center}
+\normalsize
+
+\vspace{0.5em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=1.0cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.0cm, minimum height=0.65cm] (x0) {$x_0$\\mixture};
+\node[draw, rounded corners, fill=deepblue!10, right=1.1cm of x0, minimum width=2.0cm, minimum height=0.65cm] (xt) {$x_t$\\中间状态};
+\node[draw, rounded corners, fill=rucdeepred!10, right=1.1cm of xt, minimum width=2.0cm, minimum height=0.65cm] (x1) {$x_1$\\target};
+\draw[-{Stealth[length=2.2mm]}, thick] (x0) -- node[above]{构造路径} (xt);
+\draw[-{Stealth[length=2.2mm]}, thick] (xt) -- node[above]{预测方向} (x1);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+训练时随机抽一个 $t$，让模型看中间状态 $x_t$，并预测“应该朝哪个方向走”。
+
+## Flow Matching 的公式怎么理解
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+公式 & 通俗解释 \\
+\midrule
+$x_0$ & mixture 的频谱特征 \\
+$x_1$ & target 的频谱特征 \\
+$x_t=(1-t)x_0+t x_1$ & mixture 和 target 之间的中间点 \\
+$v^{*}=x_1-x_0$ & 从 mixture 指向 target 的正确方向 \\
+$v_\theta(x_t,t,c)$ & Mini-DiT 预测出来的方向 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\includegraphics[width=0.88\linewidth]{figure/week3_flow_matching_path.png}
+\end{center}
+
+\smallsource{上排是路径上的中间频谱，下排是对应的目标速度方向。}
+
+## Mini-DiT 到底吃什么、输出什么
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.7cm, minimum height=0.55cm] (xt) {$x_t$};
+\node[draw, rounded corners, fill=deepblue!10, right=0.4cm of xt, minimum width=1.8cm, minimum height=0.55cm] (mix) {mixture 特征};
+\node[draw, rounded corners, fill=warngold!12, right=0.4cm of mix, minimum width=1.5cm, minimum height=0.55cm] (cond) {$t$ + label};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.4cm of cond, minimum width=1.8cm, minimum height=0.55cm] (dit) {Mini-DiT};
+\node[draw, rounded corners, fill=softgreen!14, right=0.4cm of dit, minimum width=1.7cm, minimum height=0.55cm] (v) {预测 $v$};
+\draw[-{Stealth[length=2mm]}] (xt) -- (mix);
+\draw[-{Stealth[length=2mm]}] (mix) -- (cond);
+\draw[-{Stealth[length=2mm]}] (cond) -- (dit);
+\draw[-{Stealth[length=2mm]}] (dit) -- (v);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+输入信息 & 为什么需要它 \\
+\midrule
+$x_t$ & 当前修正到哪一步 \\
+mixture 特征 & 原始混合声音是什么 \\
+时间步 $t$ & 当前在路径上的位置 \\
+类别 label & 告诉模型要分离哪个声源 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+模型输出的是 velocity field，也就是“下一步该往哪里改”的方向。
+
+## Mini-DiT baseline 的结构配置
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.8cm, minimum height=0.55cm] (in) {频谱特征};
+\node[draw, rounded corners, fill=deepblue!10, right=0.42cm of in, minimum width=1.5cm, minimum height=0.55cm] (patch) {Patchify};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.42cm of patch, minimum width=2.4cm, minimum height=0.55cm] (dit) {4 层 self-attention};
+\node[draw, rounded corners, fill=softgreen!14, right=0.42cm of dit, minimum width=1.6cm, minimum height=0.55cm] (out) {预测方向};
+\draw[-{Stealth[length=2mm]}] (in) -- (patch);
+\draw[-{Stealth[length=2mm]}] (patch) -- (dit);
+\draw[-{Stealth[length=2mm]}] (dit) -- (out);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+patch & hidden & depth / heads & 参数量 \\
+\midrule
+$16\times16$ & 192 & 4 / 6 & 3,102,529 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+这里先使用标准 self-attention，是为了给 Week 4 提供一个干净的对照组。后面再把 self-attention 换成 Mamba 或 hybrid。
+
+## Loss 如何计算
+
+训练 loss 分成两部分，不只是让模型“看起来像答案”。
+
+\vspace{0.3em}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+loss & 公式直觉 & 作用 \\
+\midrule
+velocity L1 & 比较 $v_\theta$ 和 $v^{*}$ & 方向要预测对 \\
+endpoint L1 & 比较预测终点和 $x_1$ & 走到终点要像 target \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+$x_{1,\mathrm{pred}} = x_t + (1-t)\,v_\theta(x_t,t,c)$
+\end{center}
+
+\vspace{0.4em}
+
+也就是说，模型不仅要知道“往哪里走”，还要保证“走完以后真的接近目标声源”。
+
+## 训练结果：loss 能稳定下降
+
+\begin{center}
+\includegraphics[width=0.9\linewidth]{figure/week3_training_curves.png}
+\end{center}
+
+\vspace{-0.1em}
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+训练记录 & 验证记录 & 训练轮数 & best val loss \\
+\midrule
+20,000 & 2,000 & 40 & 0.01376 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\smallsource{最优 checkpoint 在 epoch 39。训练和验证 loss 同步下降，说明链路是有效的。}
+
+## 关键修正：为什么不用 100-step 推理
+
+一开始我们沿用了生成模型常见的多步采样。但当前 flow 是：
+
+\begin{center}
+\large
+mixture $\rightarrow$ target
+\normalsize
+\end{center}
+
+这条路径本身是线性的。对这种设置，反复走很多小步反而会累积误差。
+
+\vspace{0.4em}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+推理协议 & Val SI-SDR & 结论 \\
+\midrule
+100 steps & -1.123 dB & 多步误差累积 \\
+1 step & -0.439 dB & 更符合当前任务 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3em}
+
+因此正式评估统一使用 1-step inference。它不是偷懒，而是和当前线性 flow 更匹配。
+
+## 模型输出怎样还原成音频
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.6cm, minimum height=0.55cm] (mix) {mixture};
+\node[draw, rounded corners, fill=deepblue!10, right=0.42cm of mix, minimum width=1.9cm, minimum height=0.55cm] (pred) {预测 target\\magnitude};
+\node[draw, rounded corners, fill=warngold!12, right=0.42cm of pred, minimum width=1.7cm, minimum height=0.55cm] (phase) {复用\\mixture phase};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.42cm of phase, minimum width=1.4cm, minimum height=0.55cm] (istft) {iSTFT};
+\node[draw, rounded corners, fill=softgreen!14, right=0.42cm of istft, minimum width=1.6cm, minimum height=0.55cm] (wav) {输出 wav};
+\draw[-{Stealth[length=2mm]}] (mix) -- (pred);
+\draw[-{Stealth[length=2mm]}] (pred) -- (phase);
+\draw[-{Stealth[length=2mm]}] (phase) -- (istft);
+\draw[-{Stealth[length=2mm]}] (istft) -- (wav);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{itemize}
+\item 频谱层面：模型预测目标声源的幅度谱。
+\item 波形层面：用 mixture 的相位做 iSTFT 还原。
+\item 局限：没有直接预测相位，所以高质量分离仍受限制。
+\end{itemize}
+
+## 三个评估指标怎么读
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+指标 & 越大/越小越好 & 衡量什么 \\
+\midrule
+Spectrogram L1 & 越小越好 & 预测频谱图像不像 target \\
+Waveform L1 & 越小越好 & 还原成波形后像不像 target \\
+SI-SDR & 越大越好 & 分离信号和失真噪声的比例 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.7em}
+
+\begin{itemize}
+\item L1 下降：说明预测结果更接近 target。
+\item SI-SDR 不升：说明分离质量、相位或时域能量关系仍有问题。
+\item 所以需要同时看多个指标，不能只看一个 loss。
+\end{itemize}
+
+## 正式测试集结果如何解释
+
+\begin{center}
+\includegraphics[width=0.82\linewidth]{figure/week3_eval_overview.png}
+\end{center}
+
+\vspace{-0.2em}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+对象 & Spectrogram L1 & Waveform L1 & SI-SDR \\
+\midrule
+Mixture & 0.05708 & 0.04200 & 0.004 dB \\
+Prediction & 0.03539 & 0.03203 & -0.419 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\smallsource{结论：L1 指标明确改善；SI-SDR 仍未超过 mixture，说明 baseline 还不是成熟分离器。}
+
+## 一条样本的直观输出
+
+\begin{center}
+\includegraphics[width=0.93\linewidth]{figure/week3_triplet_example.png}
+\end{center}
+
+\vspace{-0.1em}
+
+\begin{itemize}
+\item Prediction 已经能压低一部分非目标成分。
+\item 但它仍然会残留干扰，尤其受相位复用和轻量模型能力限制。
+\end{itemize}
+
+## 复数频谱实验：为什么做，为什么暂不作为主线
+
+\begin{columns}[T,totalwidth=\linewidth]
+\begin{column}{0.48\linewidth}
+\small
+为什么尝试：
+
+\begin{itemize}
+\item 幅度谱重建要复用 mixture phase
+\item 复数谱包含 real / imag
+\item 理论上能保留相位信息
+\end{itemize}
+\end{column}
+\begin{column}{0.48\linewidth}
+\small
+为什么没有替代：
+
+\begin{itemize}
+\item 当前 loss 仍主要在特征域
+\item 没有 phase-aware 约束
+\item 实证结果弱于 magnitude
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+模型 & Test waveform L1 & Test SI-SDR \\
+\midrule
+magnitude baseline & 0.03203 & -0.419 dB \\
+complex experiment & 0.03665 & -0.937 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+这说明“信息更完整”不等于“同一套 loss 下自动更好”。
+
+## Week 3 的结论与 Week 4 的接口
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Week 3 已完成 & 具体含义 \\
+\midrule
+数据到模型闭环 & 可训练、可验证、可采样、可测试 \\
+正式 baseline & log-magnitude STFT + self-attention Mini-DiT \\
+关键修正 & mixture-to-target flow 固定用 1-step 推理 \\
+当前不足 & SI-SDR 未超过 mixture，相位和结构仍需改进 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+Week 4 先固定数据、STFT、loss、1-step 推理和评估脚本，只替换内部 mixer：
+
+\begin{center}
+\large
+self-attention \quad vs \quad Mamba \quad vs \quad hybrid
+\normalsize
+\end{center}
+
+这样后续差异才主要来自底层序列建模算子。

@@ -1,0 +1,483 @@
+---
+title: "Week 5：从目标声源预测到完整二源输出"
+short-title: "Week 5 二源输出"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离模型研究"
+author: "深度学习自选题小组"
+institute: "深度学习入门课程大作业"
+date: "2026年5月29日"
+fontsize: 10pt
+output:
+  beamer_presentation:
+    latex_engine: xelatex
+    template: beamer_default.tex
+    fonttheme: professionalfonts
+    highlight: pygments
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \usepackage{graphicx}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \definecolor{warngold}{RGB}{178,124,20}
+  - \newcommand{\smallsource}[1]{\vspace{0.15em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{深度学习自选题小组}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 本周一句话：把分离器补完整
+
+\large
+\begin{center}
+Week 4 已经选出表现更好的 Mamba-style Mini-DiT。Week 5 固定这个主干，继续训练，并把输出从单路 target 补成 target + residual 两路音频。
+\end{center}
+\normalsize
+
+\vspace{0.55em}
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.42cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.95cm, minimum height=0.62cm] (w4) {Week 4\\Mamba best};
+\node[draw, rounded corners, fill=deepblue!10, right=0.42cm of w4, minimum width=2.2cm, minimum height=0.62cm] (loss) {继续训练\\加 waveform L1};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.42cm of loss, minimum width=2.1cm, minimum height=0.62cm] (out) {输出 target\\补 residual};
+\node[draw, rounded corners, fill=softgreen!14, right=0.42cm of out, minimum width=2.0cm, minimum height=0.62cm] (eval) {测试集指标\\试听页};
+\draw[-{Stealth[length=2mm]}] (w4) -- (loss);
+\draw[-{Stealth[length=2mm]}] (loss) -- (out);
+\draw[-{Stealth[length=2mm]}] (out) -- (eval);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.45em}
+
+\begin{itemize}
+\item 主干不再换：沿用 Week 4 的 Mamba-style SSM。
+\item 训练目标加一项：保留原 loss，再加时域 waveform L1。
+\item 输出补完整：模型预测 target，residual 用 mixture 减去预测 target 得到。
+\end{itemize}
+
+## 时间线：为什么 Week 5 做这件事
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.38cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.55cm, minimum height=0.62cm] (w1) {Week 1\\定题};
+\node[draw, rounded corners, fill=deepblue!10, right=0.38cm of w1, minimum width=1.7cm, minimum height=0.62cm] (w2) {Week 2\\2-mix 数据};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.38cm of w2, minimum width=1.75cm, minimum height=0.62cm] (w3) {Week 3\\DiT baseline};
+\node[draw, rounded corners, fill=softgreen!14, right=0.38cm of w3, minimum width=1.75cm, minimum height=0.62cm] (w4) {Week 4\\换 Mamba};
+\node[draw, rounded corners, fill=warngold!14, right=0.38cm of w4, minimum width=1.95cm, minimum height=0.62cm] (w5) {Week 5\\补完整输出};
+\draw[-{Stealth[length=2mm]}] (w1) -- (w2);
+\draw[-{Stealth[length=2mm]}] (w2) -- (w3);
+\draw[-{Stealth[length=2mm]}] (w3) -- (w4);
+\draw[-{Stealth[length=2mm]}] (w4) -- (w5);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.55em}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+阶段 & 已经完成什么 & 给下一步留下什么 \\
+\midrule
+Week 2 & 构造 ESC-50 2-mix 数据 & 有 mixture / target / residual \\
+Week 3 & 训练 self-attention Mini-DiT & 有可复现 baseline \\
+Week 4 & Mamba 指标优于 self-attention & 选定后续主干 \\
+Week 5 & 优化 loss，输出 target + residual & 接近完整二源分离流程 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## Week 4 交给 Week 5 的起点
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.46\textwidth}
+\textbf{模型和任务}
+\begin{itemize}
+\item 输入：mixture 的 log-magnitude STFT。
+\item 条件：target label。
+\item 主干：Mamba-style Mini-DiT。
+\item 推理：1-step Flow Matching。
+\item 输出：显式预测 target。
+\end{itemize}
+\end{column}
+\begin{column}{0.50\textwidth}
+\textbf{Week 4 test 指标}
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+指标 & Week4 Mamba \\
+\midrule
+Target Spec L1 & 0.03047 \\
+Target Wave L1 & 0.02815 \\
+Target SI-SDR & 0.642 dB \\
+Residual SI-SDR & 1.743 dB \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{column}
+\end{columns}
+
+\vspace{0.4em}
+
+\small
+Week 5 从这个 checkpoint 继续，不重新训练一个新主干。
+\normalsize
+
+## Week 5 要补的三个环节
+
+\begin{center}
+\begin{tabular}{p{0.25\textwidth}p{0.30\textwidth}p{0.34\textwidth}}
+\toprule
+问题 & 做法 & 目的 \\
+\midrule
+训练主要看谱图误差 & 加 waveform L1 辅助项 & 让 loss 接近最终音频 \\
+只正式导出 target & 增加 residual 输出 & 形成二源分离结果 \\
+只有平均指标不够直观 & 做类别统计和试听页 & 解释哪些样本分得好 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+
+\begin{center}
+\large
+这一周重点放在“把 Week 4 的模型用起来”，暂时不追求更复杂结构。
+\end{center}
+\normalsize
+
+## Continued Training 是什么
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.48\textwidth}
+\textbf{操作}
+\begin{itemize}
+\item 读取 Week 4 Mamba 的 `best.pt`。
+\item 学习率调小到 $5\times10^{-5}$。
+\item 继续训练全部参数 10 epoch。
+\item 没有使用 LoRA 或 adapter。
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{意义}
+\begin{itemize}
+\item Week 4 已经学会基本分离。
+\item Week 5 不希望大幅破坏原能力。
+\item 小学习率适合在原模型上细调目标。
+\item 观察加入 waveform loss 后音频指标是否提升。
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.5em}
+
+\begin{center}
+\small
+这里的 fine-tuning 指“从已有权重接着训练”，不特指 LoRA。
+\end{center}
+
+## Loss 怎么改
+
+Week 4 的训练目标：
+
+\[
+\mathcal{L}_{flow}
+= \mathcal{L}_{velocity} + \mathcal{L}_{endpoint}
+\]
+
+Week 5 保留这部分，再加一项时域误差：
+
+\[
+\mathcal{L}_{total}
+= \mathcal{L}_{flow} + 0.1 \cdot \mathcal{L}_{waveform}
+\]
+
+\[
+\mathcal{L}_{waveform}
+= \left\| \mathrm{iSTFT}(\widehat{S}_{target}, \angle S_{mixture}) - x_{target} \right\|_1
+\]
+
+\vspace{0.4em}
+
+\begin{itemize}
+\item Spec L1：在频谱图上比较预测 target 和真实 target。
+\item Waveform L1：把预测谱图还原成音频波形，再和真实音频比较。
+\item SI-SDR：从信号失真角度看分离质量，数值越高越好。
+\end{itemize}
+
+## Residual 怎么输出
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.58cm, every node/.style={font=\scriptsize, align=center}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.05cm, minimum height=0.62cm] (mix) {mixture.wav};
+\node[draw, rounded corners, fill=deepblue!10, right=0.75cm of mix, minimum width=2.3cm, minimum height=0.62cm] (model) {Week5 Mamba\\predict target};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.75cm of model, minimum width=2.2cm, minimum height=0.62cm] (target) {prediction\\target.wav};
+\node[draw, rounded corners, fill=softgreen!14, below=0.55cm of target, minimum width=2.4cm, minimum height=0.62cm] (res) {prediction\\residual.wav};
+\draw[-{Stealth[length=2mm]}] (mix) -- (model);
+\draw[-{Stealth[length=2mm]}] (model) -- (target);
+\draw[-{Stealth[length=2mm]}] (mix.south) |- (res.west);
+\draw[-{Stealth[length=2mm]}] (target.south) -- (res.north);
+\node[font=\scriptsize, align=center, below=0.15cm of model] {residual = mixture - prediction target};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.4em}
+
+\begin{itemize}
+\item 第一版没有改成双输出头。
+\item residual 利用二源混合的一致性得到。
+\item 好处是简单、稳定，也方便检查 target + residual 是否对齐 mixture。
+\end{itemize}
+
+## 训练设置
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+项目 & 设置 \\
+\midrule
+起点 checkpoint & Week4 Mamba `best.pt` \\
+训练 epoch & 10 \\
+学习率 & $5\times10^{-5}$ \\
+batch size & 192 \\
+loss 权重 & flow loss + 0.1 waveform L1 \\
+输入 & mixture log-magnitude STFT + target label \\
+输出 & prediction target + prediction residual \\
+推理 & 1-step inference \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+\small
+batch size 原计划为 24；正式训练时使用 98GB 显存服务器，为了在租期内跑完 10 epoch，实际用 192。
+\normalsize
+
+## 训练曲线
+
+\begin{center}
+\includegraphics[width=0.93\textwidth]{figure/week5_training_curves.png}
+\end{center}
+
+\small
+验证集 total loss 在第 10 个 epoch 达到本轮最好；waveform L1 数值整体稳定，没有出现明显发散。
+\normalsize
+
+## Test Split：Week4 Mamba vs Week5
+
+\begin{center}
+\includegraphics[width=0.98\textwidth]{figure/week5_test_metrics_comparison.png}
+\end{center}
+
+\vspace{-0.25em}
+
+\begin{center}
+\begin{tabular}{lrrrr}
+\toprule
+Model & Spec L1 $\downarrow$ & Wave L1 $\downarrow$ & SI-SDR $\uparrow$ & Residual SI-SDR $\uparrow$ \\
+\midrule
+Week4 Mamba & 0.03047 & 0.02815 & 0.642 & 1.743 \\
+Week5 Mamba FT & 0.03097 & 0.02721 & 1.417 & 1.975 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## 这个结果怎么读
+
+\begin{columns}[T,totalwidth=\textwidth]
+\begin{column}{0.48\textwidth}
+\textbf{变好的部分}
+\begin{itemize}
+\item Target Wave L1 降低。
+\item Target SI-SDR 提升约 0.78 dB。
+\item Residual SI-SDR 也提升。
+\item target + residual 与 mixture 长度和数值一致。
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{需要说明的部分}
+\begin{itemize}
+\item Target Spec L1 略升。
+\item 频谱误差和最终音频指标不完全同向。
+\item residual 目前由减法得到，模型暂时没有单独的 residual 输出头。
+\item 后续可尝试更稳的音频感知 loss。
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.5em}
+
+\begin{center}
+\large
+Week5 的目标是改善最终音频输出，从 Wave L1 和 SI-SDR 看已经达到。
+\end{center}
+\normalsize
+
+## 按类别看效果
+
+\begin{center}
+\includegraphics[width=0.93\textwidth]{figure/week5_classwise_si_sdr.png}
+\end{center}
+
+\small
+类别差异明显：稳定、连续的声音更容易分离；瞬态强、重叠严重的声音更容易失败。这个分析会直接服务于最终报告的失败案例部分。
+\normalsize
+
+## 试听页和样例输出
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+内容 & 文件 \\
+\midrule
+原始混合音频 & \texttt{mixture.wav} \\
+真实 target & \texttt{target.wav} \\
+真实 residual & \texttt{residual\_target.wav} \\
+Week4 输出 & \texttt{week4\_prediction\_target.wav} \\
+Week5 target & \texttt{prediction\_target.wav} \\
+Week5 residual & \texttt{prediction\_residual.wav} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.55em}
+
+\begin{itemize}
+\item 试听页包含 20 个 test 样例。
+\item 每个样例标明 mixture 由哪些类别组成，以及当前 target label。
+\item 可以直接比较 Week4 target、Week5 target 和 Week5 residual。
+\end{itemize}
+
+\smallsource{入口：\texttt{week5/analysis/week5\_listening\_demo/index.html}}
+
+## 补充分析 1：推理步数
+
+\begin{center}
+\includegraphics[width=0.95\textwidth]{figure/week5_inference_steps_comparison.png}
+\end{center}
+
+\vspace{-0.2em}
+
+\begin{center}
+\small
+\begin{tabular}{rrrr}
+\toprule
+Steps & Spec L1 $\downarrow$ & Wave L1 $\downarrow$ & SI-SDR $\uparrow$ \\
+\midrule
+1 & 0.03076 & 0.02709 & 1.413 \\
+2 & 0.03057 & 0.02708 & 1.376 \\
+4 & 0.03047 & 0.02710 & 1.301 \\
+8 & 0.03040 & 0.02715 & 1.173 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\small
+512 条 test records 上，步数增加让 Spec L1 略好，但 SI-SDR 下降。当前默认 1-step 更合适，瓶颈更可能在特征表示、phase 重建或模型能力。
+\normalsize
+
+## 补充分析 2：多尺度 STFT 指标
+
+\begin{center}
+\includegraphics[width=0.78\textwidth]{figure/week5_mrstft_comparison.png}
+\end{center}
+
+\begin{center}
+\small
+\begin{tabular}{lrr}
+\toprule
+Model & Target MR-STFT $\downarrow$ & Residual MR-STFT $\downarrow$ \\
+\midrule
+Week4 Mamba & 0.07983 & 0.08248 \\
+Week5 Mamba FT & 0.08103 & 0.08338 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\small
+MR-STFT 也显示 Week5 的频谱距离略差；它和 Spec L1 一致，但和 Wave L1 / SI-SDR 的改善形成对照。
+\normalsize
+
+## 补充分析 3：成功和失败样例
+
+\begin{center}
+\small
+\begin{tabular}{llllrr}
+\toprule
+类型 & 样例 & Mixture & Target & W4 SI-SDR & W5 SI-SDR \\
+\midrule
+成功 & sample\_10 & rain + dog & rain & 2.51 & 3.51 \\
+成功 & sample\_13 & keyboard + knock & knock & 1.39 & 2.15 \\
+失败 & sample\_00 & clock + keyboard & clock & -4.40 & -8.01 \\
+失败 & sample\_06 & glass + horn & glass & -1.61 & -4.27 \\
+边界 & sample\_01 & clock + keyboard & keyboard & -6.34 & 0.80 \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\vspace{0.35em}
+
+\begin{itemize}
+\item 成功样例要求 target 改善，同时 residual SI-SDR 为正。
+\item 失败样例多和瞬态声音、类别重叠、mixture phase 重建误差有关。
+\item 边界样例说明 Spec L1 和 SI-SDR 可能不同向。
+\end{itemize}
+
+\smallsource{完整案例：\texttt{week5/analysis/week5\_case\_study.md}}
+
+## Week 5 小结
+
+\begin{center}
+\begin{tabular}{p{0.26\textwidth}p{0.62\textwidth}}
+\toprule
+问题 & Week5 的回答 \\
+\midrule
+换新算子 & 不换，固定 Week4 Mamba 主干 \\
+从零生成 & 不改任务，仍从 mixture 条件出发 \\
+训练目标 & 原 Flow Matching loss + waveform L1 \\
+输出形式 & 输出 target，并补 residual \\
+测试结果 & Wave L1 和 SI-SDR 提升，Spec L1 略退 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+
+\large
+\begin{center}
+Week5 把“能分离一个 target”的模型，推进成了“能给出 target + residual、能试听、能按类别分析”的二源分离系统。
+\end{center}
+\normalsize
+
+## 交付物
+
+\begin{center}
+\small
+\begin{tabular}{ll}
+\toprule
+交付物 & 路径 \\
+\midrule
+模型和训练日志 & \texttt{week5/runs/mamba\_waveform\_ft\_v1/} \\
+测试集对比 & \texttt{week5/analysis/week5\_comparison\_summary.json} \\
+类别统计 & \texttt{week5/analysis/week5\_classwise\_metrics.csv} \\
+试听页 & \texttt{week5/analysis/week5\_listening\_demo/} \\
+补充分析 & \texttt{week5/analysis/inference\_steps/}, \texttt{mrstft\_metrics/} \\
+案例分析 & \texttt{week5/analysis/week5\_case\_study.md} \\
+验收报告 & \texttt{week5/analysis/week5\_acceptance\_report.md} \\
+\bottomrule
+\end{tabular}
+\normalsize
+\end{center}
+
+\vspace{0.5em}
+
+\begin{center}
+\large
+下一周主要做最终整合：报告、失败案例、复现实验包和答辩材料。
+\end{center}

@@ -1,0 +1,35 @@
+{
+  "checkpoint": "D:\\evado_onedrive\\OneDrive\\Desktop\\通识公选课\\深度学习入门\\深度学习大作业\\week5\\runs\\mamba_waveform_ft_v1\\checkpoints\\best.pt",
+  "checkpoint_epoch": 10,
+  "checkpoint_best_val_loss": 0.01961512203243646,
+  "representation": "log_magnitude",
+  "flow_start": "mixture",
+  "split": "test",
+  "num_steps": 4,
+  "num_samples": 512,
+  "spectrogram_l1": {
+    "mixture_mean": 0.05747311304003233,
+    "prediction_mean": 0.03046554331012885,
+    "improvement_mean": 0.027007569861780212,
+    "improved_ratio": 0.673828125
+  },
+  "waveform_l1": {
+    "mixture_mean": 0.04206005691253267,
+    "prediction_mean": 0.027101053179421797,
+    "improvement_mean": 0.014959003717194719,
+    "improved_ratio": 0.767578125
+  },
+  "si_sdr": {
+    "mixture_mean_db": 0.0065441167789686006,
+    "prediction_mean_db": 1.3005525865046366,
+    "improvement_mean_db": 1.2940084715373814,
+    "improved_ratio": 0.626953125
+  },
+  "residual_waveform_l1": {
+    "prediction_mean": 0.027101030829498995
+  },
+  "residual_si_sdr": {
+    "prediction_mean_db": 1.8682052697458857
+  },
+  "mixture_consistency_l1": 4.280439855022996e-11
+}

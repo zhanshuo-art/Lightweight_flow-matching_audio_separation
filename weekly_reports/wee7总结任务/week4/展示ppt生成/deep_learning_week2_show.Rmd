@@ -1,0 +1,685 @@
+---
+title: "Week 2：从 ESC-50 到 2-mix 训练数据"
+short-title: "Week 2 数据构造"
+subtitle: "基于高效序列建模的轻量级流匹配音频分离"
+author: "潘羽"
+institute: "深度学习入门课程大作业"
+date: "2026年5月14日"
+fontsize: 10pt
+output: beamer_presentation
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+  - \usepackage{booktabs}
+  - \usepackage{array}
+  - \usepackage{makecell}
+  - \definecolor{rucdeepred}{RGB}{142,22,32}
+  - \definecolor{deepblue}{RGB}{35,80,130}
+  - \definecolor{softgray}{RGB}{245,246,248}
+  - \definecolor{softgreen}{RGB}{55,125,95}
+  - \newcommand{\smallsource}[1]{\vspace{0.2em}{\tiny\color{gray}{#1}}}
+  - \AtBeginDocument{\author[]{潘羽\\深度学习自选题小组}}
+  - \setbeamertemplate{footline}{\leavevmode\hbox{\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\end{beamercolorbox}\begin{beamercolorbox}[wd=.25\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}\usebeamerfont{author in head/foot}\insertshortdate\end{beamercolorbox}\begin{beamercolorbox}[wd=.416667\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}\usebeamerfont{title in head/foot}\insertshorttitle\end{beamercolorbox}\begin{beamercolorbox}[wd=.083333\paperwidth,ht=2.25ex,dp=1ex,right]{date in head/foot}\insertframenumber{} / \inserttotalframenumber\hspace*{2ex}\end{beamercolorbox}}\vskip0pt}
+---
+
+## 目录
+
+\tableofcontents
+
+# 总览
+
+## 本周到底做了什么？
+
+\large
+\begin{center}
+把 ESC-50 的单事件声音，构造成可训练的二源分离数据。
+\end{center}
+
+\normalsize
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.55cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.8cm, minimum height=0.55cm] (raw) {ESC-50};
+\node[draw, rounded corners, fill=softgray, right=0.45cm of raw, minimum width=2.0cm, minimum height=0.55cm] (select) {选 10 类};
+\node[draw, rounded corners, fill=deepblue!10, right=0.45cm of select, minimum width=2.2cm, minimum height=0.55cm] (clean) {clean source};
+\node[draw, rounded corners, fill=rucdeepred!10, right=0.45cm of clean, minimum width=1.7cm, minimum height=0.55cm] (mix) {2-mix};
+\node[draw, rounded corners, fill=softgreen!12, right=0.45cm of mix, minimum width=1.9cm, minimum height=0.55cm] (manifest) {manifest};
+\draw[-{Stealth[length=2mm]}] (raw) -- (select);
+\draw[-{Stealth[length=2mm]}] (select) -- (clean);
+\draw[-{Stealth[length=2mm]}] (clean) -- (mix);
+\draw[-{Stealth[length=2mm]}] (mix) -- (manifest);
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5em}
+
+本周不训练模型，只做数据准备：
+
+* 先得到干净、格式统一的单声源素材
+* 再按语义兼容规则把两个声源混合
+* 最后生成训练索引和验证报告
+
+## 为什么要自己构造 2-mix？
+
+音频分离需要已知答案：
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+数据 & 模型看到什么 & 正确答案是什么 \\
+\midrule
+真实混合录音 & mixture & 通常没有每个源的 stem \\
+合成 2-mix & mixture & 有 stem\_0 和 stem\_1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+所以我们用 clean source 自己合成：
+
+$$
+mixture = stem_0 + stem_1
+$$
+
+这样每个训练样本都有明确的 target 和 residual。
+
+## 整条数据流水线
+
+\small
+\begin{center}
+\begin{tikzpicture}[node distance=0.38cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=8.8cm, minimum height=0.5cm] (a) {1. 读取 ESC-50 metadata 和原始 wav};
+\node[draw, rounded corners, fill=softgray, below=of a, minimum width=8.8cm, minimum height=0.5cm] (b) {2. 选择 10 个清晰声音类别};
+\node[draw, rounded corners, fill=softgray, below=of b, minimum width=8.8cm, minimum height=0.5cm] (c) {3. 使用官方 fold 构造 train / val / test};
+\node[draw, rounded corners, fill=deepblue!10, below=of c, minimum width=8.8cm, minimum height=0.5cm] (d) {4. 统一采样率、声道、长度和 RMS，得到 clean source};
+\node[draw, rounded corners, fill=rucdeepred!10, below=of d, minimum width=8.8cm, minimum height=0.5cm] (e) {5. 按 compatibility pair list 选择可混合类别};
+\node[draw, rounded corners, fill=rucdeepred!10, below=of e, minimum width=8.8cm, minimum height=0.5cm] (f) {6. 对两个 source 做相对增益采样并合成 2-mix};
+\node[draw, rounded corners, fill=softgreen!12, below=of f, minimum width=8.8cm, minimum height=0.5cm] (g) {7. 保存 wav、写 manifest、生成验证报告和图表};
+\draw[-{Stealth[length=2mm]}] (a) -- (b);
+\draw[-{Stealth[length=2mm]}] (b) -- (c);
+\draw[-{Stealth[length=2mm]}] (c) -- (d);
+\draw[-{Stealth[length=2mm]}] (d) -- (e);
+\draw[-{Stealth[length=2mm]}] (e) -- (f);
+\draw[-{Stealth[length=2mm]}] (f) -- (g);
+\end{tikzpicture}
+\end{center}
+
+# 1. 收集并划分原始数据
+
+## Step 1：读取 ESC-50
+
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.50\textwidth}
+\small
+\textbf{ESC-50 的基本结构}
+
+* 2000 条环境声音 wav
+* 50 个类别，每类 40 条
+* 每条约 5 秒
+* 原始采样率 44.1 kHz
+* 原始数据已经是 mono
+\end{column}
+\begin{column}{0.46\textwidth}
+\small
+\textbf{metadata 关键字段}
+
+\begin{tabular}{ll}
+\toprule
+字段 & 含义 \\
+\midrule
+filename & 音频文件名 \\
+fold & 官方折号 1--5 \\
+category & 类别名称 \\
+src\_file & 原始来源 \\
+take & 同源片段标记 \\
+\bottomrule
+\end{tabular}
+\end{column}
+\end{columns}
+
+\smallsource{本项目读取 \texttt{week2/ESC-50-master/meta/esc50.csv}。}
+
+## Step 2：选择 10 个清晰类别
+
+\small
+选择原则：声音事件相对单一、容易听清、适合做二源分离。
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+类别 & 中文理解 & 声音特点 \\
+\midrule
+dog & 狗叫 & 动物短促事件 \\
+rain & 雨声 & 稳定背景声 \\
+chirping\_birds & 鸟鸣 & 户外清晰声源 \\
+keyboard\_typing & 键盘声 & 室内短促事件 \\
+door\_wood\_knock & 敲门声 & 室内短促事件 \\
+clock\_tick & 钟表滴答 & 节律清楚 \\
+glass\_breaking & 玻璃破碎 & 瞬态明显 \\
+vacuum\_cleaner & 吸尘器 & 机械稳态声 \\
+siren & 警笛 & 城市声源 \\
+car\_horn & 汽车喇叭 & 城市短促事件 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+最终得到 400 条候选 source。
+
+## Step 3：用官方 fold 构造 split
+
+\small
+ESC-50 官方给出 5 个 fold。我们直接用 fold 划分数据集：
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Split & 使用 fold & clean source 数量 & 用途 \\
+\midrule
+train & 1, 2, 3 & 240 & 训练模型 \\
+val & 4 & 80 & 调参和观察 \\
+test & 5 & 80 & 最终评估 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+为什么这样做？
+
+* 官方 fold 已尽量避免同源片段跨 fold
+* train / val / test 不共享 source
+* 每个 mixture 只在同一个 split 内构造
+
+# 2. 处理成 clean source
+
+## Step 4：统一音频格式
+
+\small
+每条 source 进入混合前，先统一成相同规格：
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+处理项 & 本项目设置 \\
+\midrule
+采样率 & 16 kHz \\
+声道 & mono，单声道 \\
+长度 & 5.0 秒 \\
+RMS 目标 & 0.1 \\
+静音阈值 & RMS < 0.0005 则跳过 \\
+峰值限制 & max(abs(audio)) <= 0.99 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+输出：\texttt{clean\_sources/train}、\texttt{clean\_sources/val}、\texttt{clean\_sources/test}
+
+## mono、采样率、RMS 分别是什么？
+
+\small
+\begin{tabular}{p{0.23\textwidth}p{0.67\textwidth}}
+\toprule
+概念 & 直观解释 \\
+\midrule
+mono & 单声道；只保留一个波形，降低处理复杂度 \\
+采样率 & 每秒多少个采样点；16 kHz 表示每秒 16000 点 \\
+RMS & 均方根，粗略表示整段音频的整体响度或能量 \\
+peak & 最大绝对振幅，用来检查是否会削波失真 \\
+\bottomrule
+\end{tabular}
+
+\vspace{0.7em}
+
+RMS 公式：
+
+$$
+\mathrm{RMS}(x)=\sqrt{\frac{1}{N}\sum_{i=1}^{N}x_i^2}
+$$
+
+如果 RMS 很小，说明这条音频可能接近静音。
+
+## RMS 归一化：先校准原材料
+
+\small
+原始 ESC-50 中，不同录音的音量可能差很多：
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.65cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=2.8cm, minimum height=0.55cm] (a) {原始 dog：可能很响};
+\node[draw, rounded corners, fill=softgray, right=0.7cm of a, minimum width=2.8cm, minimum height=0.55cm] (b) {原始 rain：可能很小};
+\node[draw, rounded corners, fill=deepblue!10, below=0.55cm of a, xshift=1.75cm, minimum width=4.6cm, minimum height=0.55cm] (c) {全部归一化到 RMS = 0.1};
+\draw[-{Stealth[length=2mm]}] (a) -- (c);
+\draw[-{Stealth[length=2mm]}] (b) -- (c);
+\end{tikzpicture}
+\end{center}
+
+归一化公式：
+
+$$
+x_{\mathrm{norm}} = x \times \frac{0.1}{\mathrm{RMS}(x)}
+$$
+
+这一步不是直接设置 SNR，而是让所有 source 站到同一响度基准线上。
+
+## 相对增益：再人为设计混合难度
+
+\small
+RMS 归一化后，如果直接相加，所有 mixture 都接近“等响度混合”。这太单一。
+
+所以混合时再采样相对增益：
+
+$$
+g \sim U(-5,5)\ \mathrm{dB}, \qquad gain = 10^{g/20}
+$$
+
+\begin{center}
+\begin{tabular}{ccc}
+\toprule
+相对增益 & 振幅倍数 & 直观效果 \\
+\midrule
+-5 dB & 约 0.56 & 第二个 stem 更小 \\
+0 dB & 1.00 & 两个 stem 差不多响 \\
++5 dB & 约 1.78 & 第二个 stem 更大 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3em}
+
+一句话：RMS 归一化负责“公平基准”，相对增益负责“难度变化”。
+
+# 3. 合成 2-mix
+
+## Step 5：用 compatibility pair list 控制可混合类别
+
+\small
+不完全随机混合，而是借鉴 HIVE 的“语义一致混合”思想。
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+场景直觉 & 允许组合示例 & 为什么合理 \\
+\midrule
+自然/户外 & dog + rain；rain + birds & 现实中可能共现 \\
+城市环境 & siren + car\_horn；rain + car\_horn & 交通和天气组合 \\
+室内事件 & keyboard + clock；keyboard + knock & 声源清楚、容易解释 \\
+室内机械 & keyboard + vacuum；clock + vacuum & 稳态声和短促声互补 \\
+突发事件 & glass + knock；glass + siren & 瞬态目标明显 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+本项目共使用 14 个兼容类别对，不做同类别混合。
+
+## Step 6：训练集里有多少 source pair？
+
+\small
+训练集中每类有 24 条 clean source。对一个兼容类别对：
+
+$$
+24 \times 24 = 576\ \text{个 source pair}
+$$
+
+共有 14 个兼容类别对：
+
+$$
+14 \times 576 = 8064\ \text{个唯一 source pair}
+$$
+
+\vspace{0.5em}
+
+但我们生成：
+
+$$
+10000\ \text{个 train mixtures}
+$$
+
+这不是“无限刷数据”，而是：
+
+* 基本覆盖所有兼容 source pair
+* 少量 pair 会以不同相对增益重复出现
+* 平均重复强度约为 \(10000 / 8064 \approx 1.24\)
+
+## 为什么不是生成无限多？
+
+\small
+理论上，同一对 source 可以用很多不同 gain 重复混合。
+
+但信息量主要来自：
+
+```text
+clean source 的内容 + 类别组合
+```
+
+gain 变化只是增加一点响度多样性。
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+生成太少 & 生成适中 & 生成太多 \\
+\midrule
+覆盖不足 & 覆盖 source pair & 重复严重 \\
+训练不稳定 & 有少量 gain 多样性 & 磁盘和训练成本高 \\
+难做对比 & 适合课程实验 & 信息增益变小 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+所以 10000 个 train mixtures 是覆盖性、数据多样性和计算成本之间的折中。
+
+## Step 7：单个 2-mix 如何生成？
+
+\small
+以 train split 中的 `dog + rain` 为例：
+
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=8.6cm, minimum height=0.5cm] (a) {1. 从 compatibility pair list 抽到 dog + rain};
+\node[draw, rounded corners, fill=softgray, below=of a, minimum width=8.6cm, minimum height=0.5cm] (b) {2. 从 train/dog 抽一条 source\_A，从 train/rain 抽一条 source\_B};
+\node[draw, rounded corners, fill=deepblue!10, below=of b, minimum width=8.6cm, minimum height=0.5cm] (c) {3. 对 source\_B 采样相对增益 g in [-5, 5] dB};
+\node[draw, rounded corners, fill=rucdeepred!10, below=of c, minimum width=8.6cm, minimum height=0.5cm] (d) {4. 相加得到 mixture，并同倍率缩放防削波};
+\node[draw, rounded corners, fill=softgreen!12, below=of d, minimum width=8.6cm, minimum height=0.5cm] (e) {5. 保存 wav，并写两条 manifest 训练记录};
+\draw[-{Stealth[length=2mm]}] (a) -- (b);
+\draw[-{Stealth[length=2mm]}] (b) -- (c);
+\draw[-{Stealth[length=2mm]}] (c) -- (d);
+\draw[-{Stealth[length=2mm]}] (d) -- (e);
+\end{tikzpicture}
+\end{center}
+
+注意：所有抽样都只在当前 split 内发生，不跨 train/val/test。
+
+## Step 8：2-mix 的数学规则
+
+\small
+两个 source 已经 RMS 归一化：
+
+$$
+stem_0 = source_A
+$$
+
+$$
+stem_1 = 10^{g/20} \cdot source_B,\qquad g\sim U(-5,5)
+$$
+
+$$
+mixture = stem_0 + stem_1
+$$
+
+\vspace{0.4em}
+
+如果三者中任意一个峰值超过 0.99，就同倍率缩小：
+
+$$
+scale = \frac{0.99}{\max(|mixture|, |stem_0|, |stem_1|)}
+$$
+
+同倍率缩放是为了保证：
+
+$$
+mixture \approx stem_0 + stem_1
+$$
+
+## Step 9：每个 mixture 保存什么？
+
+\small
+每个 mixture 是一个文件夹：
+
+\vspace{0.3em}
+
+\scriptsize
+\texttt{rendered\_mixtures/train/mix\_000001/}\\
+\texttt{\quad mixture.wav}\\
+\texttt{\quad stem\_0.wav}\\
+\texttt{\quad stem\_1.wav}
+
+\normalsize
+\vspace{0.6em}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+文件 & 含义 & 训练中用途 \\
+\midrule
+mixture.wav & 两个 stem 相加 & 模型输入条件之一 \\
+stem\_0.wav & 第一个源 & 可作为 target 或 residual \\
+stem\_1.wav & 第二个源 & 可作为 target 或 residual \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+## Step 10：一个 mixture 生成两条训练记录
+
+\small
+同一个 mixture 可以训练两个方向：
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+记录 & mixture & target & residual \\
+\midrule
+t0 & mixture.wav & stem\_0.wav & stem\_1.wav \\
+t1 & mixture.wav & stem\_1.wav & stem\_0.wav \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.5em}
+
+例如 `dog + rain`：
+
+* t0：目标是 dog，剩余是 rain
+* t1：目标是 rain，剩余是 dog
+
+所以 10000 个 train mixtures 会变成 20000 条 train manifest records。
+
+## Step 11：与 SAM Audio 的训练格式对齐
+
+\small
+SAM Audio 的训练样本可抽象为：
+
+$$
+(x_{mix}, x_{tgt}, x_{res}, c)
+$$
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+SAM Audio 字段 & 本项目字段 & 含义 \\
+\midrule
+\(x_{mix}\) & mixture\_path & 混合音频 \\
+\(x_{tgt}\) & target\_path & 当前要分离的目标声源 \\
+\(x_{res}\) & residual\_path & 除目标外的剩余声源 \\
+\(c\) & target\_label / target\_prompt & 类别条件或文本提示 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+我们不是复现完整 SAM Audio，而是借用它清晰的数据组织方式。
+
+## 为什么要对齐 SAM Audio？
+
+\small
+对齐的不是“大模型规模”，而是样本格式。
+
+\begin{center}
+\begin{tabular}{p{0.30\textwidth}p{0.57\textwidth}}
+\toprule
+好处 & 说明 \\
+\midrule
+任务定义清楚 & 每条样本都知道 mixture、target、residual 和条件 \\
+方便写 Dataset & 下周可以直接按 manifest 读取 waveform \\
+方便扩展 & 以后可以把 label 换成文本 embedding 或其他 prompt \\
+便于汇报 & 和参考工作有明确对应关系，不是随意组织数据 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+# 4. 结果与验证
+
+## 最终生成了什么？
+
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Split & Mixtures & Manifest records & Clean sources \\
+\midrule
+train & 10000 & 20000 & 240 \\
+val & 1000 & 2000 & 80 \\
+test & 1000 & 2000 & 80 \\
+\midrule
+total & 12000 & 24000 & 400 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.4em}
+
+正式输出目录：
+
+\scriptsize
+\texttt{week2/data\_esc50\_2mix/}
+
+\normalsize
+
+## 数量与类别平衡
+
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.49\textwidth}
+\begin{center}
+\includegraphics[width=\linewidth]{figure/week2_class_count_bar.png}
+\end{center}
+\end{column}
+\begin{column}{0.49\textwidth}
+\begin{center}
+\includegraphics[width=\linewidth]{figure/week2_target_count_bar.png}
+\end{center}
+\end{column}
+\end{columns}
+
+\smallsource{左：clean source 类别数量；右：target 在 manifest 中出现次数。}
+
+## 验证做了什么？
+
+\small
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+检查项 & 结果 & 说明 \\
+\midrule
+数量检查 & PASS & 12000 mixtures，24000 records \\
+可加性检查 & PASS & max abs error = 0.00006104 \\
+clipping 检查 & PASS & max peak = 0.989960 \\
+shape/sample-rate & PASS & 16 kHz、5 秒一致 \\
+split 泄漏检查 & PASS & train/val/test source 不交叉 \\
+兼容矩阵检查 & PASS & mixture 均来自允许类别对 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+这些检查保证：数据不是只“生成了”，而是可以被后续训练可靠读取。
+
+## 频谱图样例
+
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.32\textwidth}
+\includegraphics[width=\linewidth]{figure/week2_example_stem_0_spectrogram.png}
+
+\centering \scriptsize stem\_0
+\end{column}
+\begin{column}{0.32\textwidth}
+\includegraphics[width=\linewidth]{figure/week2_example_stem_1_spectrogram.png}
+
+\centering \scriptsize stem\_1
+\end{column}
+\begin{column}{0.32\textwidth}
+\includegraphics[width=\linewidth]{figure/week2_example_mixture_spectrogram.png}
+
+\centering \scriptsize mixture
+\end{column}
+\end{columns}
+
+\vspace{0.4em}
+
+\small
+本周频谱图只用于展示和检查；训练特征将在 Week 3 动态计算。
+
+# 5. 接下来做什么
+
+## Week 3：从 waveform 到 STFT 频谱图
+
+\small
+\begin{center}
+\begin{tikzpicture}[node distance=0.45cm, every node/.style={font=\scriptsize}]
+\node[draw, rounded corners, fill=softgray, minimum width=1.8cm, minimum height=0.55cm] (a) {manifest};
+\node[draw, rounded corners, fill=softgray, right=0.45cm of a, minimum width=2.2cm, minimum height=0.55cm] (b) {读取 waveform};
+\node[draw, rounded corners, fill=deepblue!10, right=0.45cm of b, minimum width=1.7cm, minimum height=0.55cm] (c) {STFT};
+\node[draw, rounded corners, fill=deepblue!10, right=0.45cm of c, minimum width=2.3cm, minimum height=0.55cm] (d) {log-magnitude};
+\node[draw, rounded corners, fill=rucdeepred!10, below=0.55cm of d, minimum width=3.1cm, minimum height=0.55cm] (e) {Flow Matching baseline};
+\draw[-{Stealth[length=2mm]}] (a) -- (b);
+\draw[-{Stealth[length=2mm]}] (b) -- (c);
+\draw[-{Stealth[length=2mm]}] (c) -- (d);
+\draw[-{Stealth[length=2mm]}] (d) -- (e);
+\end{tikzpicture}
+\end{center}
+
+训练特征：
+
+$$
+mixture\_logmag = \log(1 + |\mathrm{STFT}(mixture)|)
+$$
+
+$$
+target\_logmag = \log(1 + |\mathrm{STFT}(target)|)
+$$
+
+## Week 3：Flow Matching 的训练目标
+
+\small
+下周会把 target 频谱作为生成目标：
+
+$$
+x_1 = target\_logmag
+$$
+
+从高斯噪声出发：
+
+$$
+x_0 \sim \mathcal{N}(0,I)
+$$
+
+随机采样时间：
+
+$$
+t \sim U(0,1), \qquad x_t = (1-t)x_0 + tx_1
+$$
+
+模型学习预测速度：
+
+$$
+v^\star = x_1 - x_0
+$$
+
+这就是后续 Mini-DiT baseline 的输入和监督信号。
+
+## 总结
+
+\large
+\begin{center}
+Week 2 完成了从 ESC-50 到可训练 2-mix 数据集的闭环。
+\end{center}
+
+\normalsize
+
+* 数据来源：ESC-50，使用官方 fold 构造 split
+* 数据处理：统一采样率、mono、长度、RMS 和 peak
+* 数据合成：借鉴 HIVE，clean source + 语义一致 2-mix
+* 样本格式：对齐 SAM Audio 的 \((x_{mix},x_{tgt},x_{res},c)\)
+* 验证结果：数量、可加性、削波、泄漏、兼容矩阵全部通过
+* 下一步：Dataset/DataLoader + STFT + Flow Matching baseline
+
+\vspace{0.8em}
+
+\center{\LARGE{谢谢大家！}}

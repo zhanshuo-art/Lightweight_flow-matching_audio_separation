@@ -1,0 +1,28 @@
+{
+  "checkpoint": "/root/autodl-tmp/week4_project/week4/runs/minidit_self_attention_recheck_bs48/checkpoints/best.pt",
+  "checkpoint_epoch": 38,
+  "checkpoint_best_val_loss": 0.018675486091524363,
+  "representation": "log_magnitude",
+  "flow_start": "mixture",
+  "split": "test",
+  "num_steps": 1,
+  "num_samples": 2000,
+  "spectrogram_l1": {
+    "mixture_mean": 0.057077601582626813,
+    "prediction_mean": 0.036001867715036495,
+    "improvement_mean": 0.021075733863166534,
+    "improved_ratio": 0.5555
+  },
+  "waveform_l1": {
+    "mixture_mean": 0.0420037932987907,
+    "prediction_mean": 0.03377802342141513,
+    "improvement_mean": 0.008225769855082036,
+    "improved_ratio": 0.6275
+  },
+  "si_sdr": {
+    "mixture_mean_db": 0.004401049847714603,
+    "prediction_mean_db": -1.4184370378586464,
+    "improvement_mean_db": -1.4228380878455937,
+    "improved_ratio": 0.409
+  }
+}
